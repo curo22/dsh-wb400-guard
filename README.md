@@ -1,14 +1,37 @@
 # dsh-wb400-guard
 
-修掉 DeepSeek Harness 走 **WorkBuddy 国内版反代**时每轮对话都失败的 400。
+**中文** | [English](README.en.md)
 
-症状：
+[![CI](https://github.com/curo22/dsh-wb400-guard/actions/workflows/test.yml/badge.svg)](https://github.com/curo22/dsh-wb400-guard/actions/workflows/test.yml)
+[![tests](https://img.shields.io/badge/tests-17%20passing-brightgreen)](test/shipped.test.mjs)
+[![dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)](package.json)
+[![node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-green)](package.json)
+[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
+一条命令修掉 DeepSeek Harness 走 **WorkBuddy 国内版反代**时每轮对话都失败的 400。
 
 ```
 本轮运行失败 400: {"message":"workbuddy upstream client (http 400): 请求被拦截，请重新发送","type":"client","code":"client"}
 ```
 
 标签 `INVALID_REQUEST`，底层是网关的 `code 11128`。走国际版（`www.workbuddy.ai`）不出现。
+
+---
+
+## 30 秒判断你需不需要它
+
+| 现象 | 命中 |
+|---|---|
+| 报错文字是「请求被拦截，请重新发送」，标签 `INVALID_REQUEST` | 是 |
+| 换成国际版模型就正常，换回国内版就失败 | 是 |
+| 每次都在第一步就挂，连一句完整回复都没有 | 是 |
+| 换个账号、换个模型、换台机器，症状一模一样 | 是 |
+| 手动在 WorkBuddy 官方客户端里聊天是正常的 | 是 |
+| 报的是 `429` 或「usage exceeds frequency limit」 | 否，那是额度 |
+| 报的是 `11101` 或「Non-stream chat request」 | 否，那是非流式请求 |
+| 报的是 `fetch failed` / 502 | 否，那是网络 |
+
+上面前三条同时命中，基本可以确定就是本文档解决的那个问题。
 
 ## 为什么会被拦
 
@@ -27,9 +50,11 @@ Tokens prefixed with @ are paths the user explicitly referenced. ...
 
 插件包把这条错误包装成上面那句「请求被拦截」。
 
-### 定位过程（可复现）
+国际网关不做这个校验，所以同一份请求发到 `www.workbuddy.ai` 是 200。
 
-判定依据是内容和字符位置，不是长度：
+## 定位过程（可复现）
+
+判定依据是内容，不是长度：
 
 | 实验 | 结果 |
 |---|---|
@@ -38,12 +63,14 @@ Tokens prefixed with @ are paths the user explicitly referenced. ...
 | 纯 `a` 填充到 60000 字符 | 200 |
 | 纯中文填充到 30000 字符 | 200 |
 | 把触发块重复 100 / 400 次 | 200 |
-| `@` → `(at)` | **200** |
-| 全角 `＠` 替换 | 400（网关折回半角再判） |
+| `@` 换成 `(at)` | **200** |
+| 换成全角 `＠` | 400（网关折回半角再判） |
 | `@` 放进 user 消息 | 200（只在 system 里触发） |
 | 同一 body 连发 5 次 | 5 次全 11128，完全确定性 |
 
 最小触发块是原文里 `Tokens prefixed with @` 那一段，117 字符。单独发也拦。
+
+滑窗实验把触发点收到 25000–30000 这个区间，段级替换实验排除了「某一整段敏感内容」的可能。最后用码点级比对确认：触发源就是 `@` 这个字形本身。
 
 ## 插件做什么
 
@@ -56,14 +83,16 @@ Tokens prefixed with (at) are paths the user explicitly referenced. ...
 (at)"..." quotes a path containing spaces.
 ```
 
-### 为什么挂在 fetch 层
+模型看到的指令含义没有变化，网关看到的不再有那个字符。
+
+## 为什么挂在 fetch 层
 
 试过另外两个位置，都不行：
 
 - **`llm/stream` 事件**：`GenerateOptions` 到达时是深冻结的，`next()` 也不接参数，只能读不能改。
 - **`system-prompt/assemble` 事件**：能改，但它会改掉所有 provider 的提示词，而问题只出在国内网关一家。
 
-fetch 是唯一既精准、又能覆盖插件内部 11128 重试阶梯的位置 —— 那套阶梯每次重试都会重新发请求，在 body 组装层改就会漏掉其中几级。
+fetch 是唯一既精准、又能覆盖插件内部 11128 重试阶梯的位置。那套阶梯每次重试都会重新发请求，在 body 组装层改就会漏掉其中几级。
 
 ## 安装
 
@@ -71,9 +100,9 @@ fetch 是唯一既精准、又能覆盖插件内部 11128 重试阶梯的位置 
 
 ### 一条命令
 
-把本仓库拷到任意位置，然后：
-
 ```powershell
+git clone https://github.com/curo22/dsh-wb400-guard.git
+cd dsh-wb400-guard
 node install.mjs
 ```
 
@@ -91,7 +120,7 @@ node install.mjs D:\path\to\other\profile
 node install.mjs --uninstall
 ```
 
-装完 **重启 DSH Desktop**。宿主日志里应该出现：
+装完 **重启 DSH Desktop**（不是关窗口，是完全退出）。宿主日志里应该出现：
 
 ```
 [I] [dsh-wb400-guard] [dsh-wb400-guard] fetch guard installed for copilot.tencent.com
@@ -153,7 +182,7 @@ node verify-live.mjs
 经插件后（预期通过）      200 PASS             OK
 ```
 
-另外三个更贴现场的脚本：
+另外几个更贴现场的脚本：
 
 ```powershell
 # 端到端：原版 dsh-workbuddy-connect 组装 → guard 改写 → 真实网关
@@ -162,24 +191,47 @@ node scripts/verify-pipeline.mjs
 # 拿一份 154KB 的真实失败 body（94 个工具、15 条消息）重放
 node scripts/verify-real-body.mjs
 
+# 装完重启后跑这个：一条命令回答「修复此刻在不在工作」
+node scripts/health-check.mjs
+
 # 只读日志，看真实流量有没有被改写
 node scripts/read-guard-log.mjs
 
-# 装完重启后跑这个：一条命令回答「修复此刻在不在工作」
-node scripts/health-check.mjs
+# 仓库与已安装的 vendor 副本是否一致
+node scripts/compare-vendor.mjs . "$env:USERPROFILE\.dsh\profiles\desktop\vendor\dsh-wb400-guard"
 ```
 
-## 不用手改 `dsh-workbuddy-connect`
+## 排障
 
-本插件在 fetch 层独立完成改写，不依赖插件包里的任何内容：
+装完还是不行，按这个顺序查：
 
-```
-dsh-workbuddy-connect 原版 → 组装 body（@ 原样保留）→ globalThis.fetch → dsh-wb400-guard 改写 → 国内网关
-```
+**1. 插件有没有被加载。** 宿主日志（`%APPDATA%\DSH Desktop\logs\host\`）里搜 `dsh-wb400-guard`。没有 `fetch guard installed` 这一行，说明 profile 没读到它 —— 多半是没重启，或者 `dsh.profile.bundles` 没写进去。
 
-如果你之前直接改过 `node_modules/dsh-workbuddy-connect/lib/host-heartbeat-*.js`，可以把那份改动还原成原版 —— 修复在 DSH 的 profile 层，插件包升级不会覆盖它。
+**2. 插件本身有没有效。** 跑 `node verify-live.mjs`。它不依赖 DSH 的加载链路，直接拿真实凭证打真实网关。如果这一步的「经插件后」也不是 200，问题在插件或凭证，不在安装。
 
-还原之后要**完全退出 DSH Desktop 再打开**。进程里跑着的仍是启动那一刻加载的代码：磁盘文件改回原版不会让改动消失，它要等到下次启动才失效。反过来也一样，装了插件不重启就不会生效。
+**3. 改写有没有真的发生。** 跑 `node scripts/health-check.mjs`。它会同时读安装状态、宿主加载行、guard 日志的改写计数、宿主日志的拦截记录，然后给结论。看到「已就绪，但还没有国内路由的流量经过」，用国内版模型发一条消息再跑一次。
+
+**4. 网关是不是改了规则。** 如果 `verify-live.mjs` 的「经插件前」那一行也变成 200 了，说明网关不再因为 `@` 拦截，插件处于空转，不影响使用。
+
+## 常见问题
+
+**会不会影响我别的模型？**
+不会。只有 host 匹配 `copilot.tencent.com` 的请求才会被看。DeepSeek 官方 API、OpenAI、Anthropic、WorkBuddy 国际版都是原样透传同一个对象引用，连序列化都不会重做。
+
+**会不会改坏我的对话内容？**
+只动 system / developer 消息。user 里写的邮箱、`@某人`、代码里的装饰器、正则，一个都不碰。改的也只有那句文件引用说明，语义不变。
+
+**为什么不用改 `dsh-workbuddy-connect`？**
+改那个包在插件升级时会被覆盖，得重打。本插件在 profile 层，插件包升级不影响它。
+
+**升级插件后要重装吗？**
+要。`install.mjs` 是拷贝到 `vendor`，不是链接。拉新代码后重跑一次，再用 `compare-vendor.mjs` 确认一致。
+
+**国际版也装吗？**
+默认不防护国际版。如果哪天 `www.workbuddy.ai` 也开始校验，往 `gatewayHosts` 加一条、`mode` 设成 `all` 即可。
+
+**会被封号吗？**
+只改自己发出去的消息里一个字符的写法，请求还是同一个端点、同一套凭证、同样的工具和对话。没有伪造身份、没有绕过额度、没有多开。
 
 ## 已知限制
 
@@ -187,8 +239,8 @@ dsh-workbuddy-connect 原版 → 组装 body（@ 原样保留）→ globalThis.f
 - **DSH 内核改了 `FILE_REFERENCE_PROMPT` 措辞**时，`anchor` 模式仍有 `Tokens prefixed with @` 这个锚点兜底；锚点也变了就把 `mode` 设成 `all`。
 - **429 限流与本插件无关**。那是额度用尽，等额度重置。
 - **`stream: false` 会被国内网关拒为 `11101`**，这个码跟 `11128` 不是一回事。本插件只解决 `11128`。
-- **国际网关**默认不防护。如果哪天 `www.workbuddy.ai` 也开始校验 `@`，往 `gatewayHosts` 里加一条即可（`mode` 建议设为 `all`）。
 - **两个插件同时包装 `fetch` 时**后装的在外层。本插件用 `Symbol.for('dsh-wb400-guard.installed')` 保证只装一层，重复调用返回同一个卸载函数，卸载时也不会覆盖别人后来装的 `fetch`。
+- **磁盘文件与运行中进程是两回事**。把磁盘文件改回原版，不会让进程里的改动消失，它要等下次启动才失效。装了插件不重启，同理。
 
 ## 开发
 
@@ -218,6 +270,14 @@ node scripts/compare-vendor.mjs . "$env:USERPROFILE\.dsh\profiles\desktop\vendor
 ```
 
 会依次检查工作区干净、SSH 认证、远端仓库存在，再推。哪一步不通就停在哪一步并说清原因。
+
+> Windows 上 git 自带的 ssh 在中文用户名下会把 HOME 解析成 GBK 乱码路径，导致 `Host key verification failed`。
+> 用系统 OpenSSH：`git config core.sshCommand 'C:/Windows/System32/OpenSSH/ssh.exe'`。
+
+## 相关
+
+- [推广文案包 PROMO.md](PROMO.md) —— 一句话简介、各平台发布帖、标签建议，随手转发用
+- [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) —— 本插件服务的宿主
 
 ## 许可
 

@@ -1,16 +1,19 @@
 {
   "name": "dsh-wb400-guard",
-  "version": "0.1.0",
-  "description": "Fixes the WorkBuddy CN gateway 400 (code 11128) when using DeepSeek Harness with a domestic WorkBuddy reverse proxy.",
+  "version": "0.1.1",
+  "description": "Fixes the WorkBuddy China gateway 400 (code 11128) when using DeepSeek Harness with a domestic WorkBuddy reverse proxy. One command, zero runtime dependencies.",
   "keywords": [
     "dsh",
     "dsh-plugin",
     "deepseek-harness",
     "workbuddy",
+    "workbuddy-cn",
     "codebuddy",
     "gateway",
     "400",
-    "11128"
+    "11128",
+    "fetch-interceptor",
+    "reverse-proxy"
   ],
   "license": "MIT",
   "author": "curo22",
@@ -25,6 +28,9 @@
     "lib",
     "cordis.patch.yml",
     "README.md",
+    "README.en.md",
+    "PROMO.md",
+    "PROMO.en.md",
     "LICENSE",
     "install.mjs",
     "verify-live.mjs",
@@ -34,9 +40,11 @@
   "scripts": {
     "test": "node --test",
     "install:profile": "node install.mjs",
+    "uninstall:profile": "node install.mjs --uninstall",
     "verify:live": "node verify-live.mjs",
     "verify:real-body": "node scripts/verify-real-body.mjs",
-    "verify:pipeline": "node scripts/verify-pipeline.mjs"
+    "verify:pipeline": "node scripts/verify-pipeline.mjs",
+    "health": "node scripts/health-check.mjs"
   },
   "engines": {
     "node": "^22.19.0 || >=24.0.0"
