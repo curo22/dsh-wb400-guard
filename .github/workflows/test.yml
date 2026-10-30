@@ -1,0 +1,67 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: node ${{ matrix.node }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: ['22.x', '24.x']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: 跑产物测试
+        run: node --test
+
+      - name: 检查 lib 可被 import（插件契约）
+        shell: bash
+        run: |
+          node -e "
+          import('./lib/index.js').then((m) => {
+            const problems = [];
+            if (m.name !== 'dsh-wb400-guard') problems.push('name 不对: ' + m.name);
+            if (!Array.isArray(m.inject) || m.inject.length !== 0) problems.push('inject 必须是空数组');
+            if (typeof m.apply !== 'function') problems.push('apply 不是函数');
+            if (!Array.isArray(m.DEFAULT_GUARDED_HOSTS)) problems.push('DEFAULT_GUARDED_HOSTS 缺失');
+            const atCount = [...m.FILE_REFERENCE_PROMPT].filter((c) => c === '@').length;
+            if (atCount !== 2) problems.push('FILE_REFERENCE_PROMPT 里的 @ 数量应为 2，实际 ' + atCount);
+            if (problems.length) { console.error(problems.join('\n')); process.exit(1); }
+            console.log('契约通过');
+          });
+          "
+
+      - name: 检查 cordis.patch.yml 结构
+        shell: bash
+        run: |
+          node -e "
+          const fs = require('fs');
+          const yml = fs.readFileSync('cordis.patch.yml', 'utf8');
+          if (!yml.includes('id: dsh-wb400-guard')) { console.error('patch 里缺 id'); process.exit(1); }
+          if (!yml.includes(\"name: 'dsh-wb400-guard'\")) { console.error('patch 里缺 name'); process.exit(1); }
+          if (!yml.includes('copilot.tencent.com')) { console.error('patch 里缺默认 host'); process.exit(1); }
+          console.log('patch 通过');
+          "
+
+      - name: 检查 package.json 没被加 BOM
+        shell: bash
+        run: |
+          node -e "
+          const fs = require('fs');
+          const buf = fs.readFileSync('package.json');
+          if (buf.slice(0, 3).toString('hex') === 'efbbbf') { console.error('package.json 有 BOM'); process.exit(1); }
+          JSON.parse(buf.toString('utf8'));
+          console.log('package.json 干净');
+          "

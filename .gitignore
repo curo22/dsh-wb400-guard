@@ -1,0 +1,21 @@
+node_modules/
+dist/
+coverage/
+*.log
+
+# 本地 profile 备份
+package.json.bak-*
+*.bak-*
+*.bak-wb400-*
+
+# 凭证与运行态，任何情况都不该进仓库
+.credentials.yaml
+.workbuddy-*.json
+.workbuddy-wire.log*
+*.jsonl
+
+# 编辑器 / 系统
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

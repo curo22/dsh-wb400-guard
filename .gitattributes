@@ -1,0 +1,9 @@
+# 统一用 LF，避免 Windows 上 CRLF 造成的满屏 diff。
+* text=auto eol=lf
+
+# PowerShell 脚本在 Windows 上习惯 CRLF，但 LF 也能跑，保持统一。
+*.ps1 text eol=lf
+
+*.png binary
+*.jpg binary
+*.zip binary

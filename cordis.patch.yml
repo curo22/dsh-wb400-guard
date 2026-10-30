@@ -1,0 +1,10 @@
+# dsh bundle patch: inserts this plugin into a profile's layer stack.
+- insert:
+    - id: dsh-wb400-guard
+      name: 'dsh-wb400-guard'
+      config:
+        enabled: true
+        gatewayHosts:
+          - copilot.tencent.com
+        logPath: ''
+        dryRun: false

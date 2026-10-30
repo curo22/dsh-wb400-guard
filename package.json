@@ -1,0 +1,57 @@
+{
+  "name": "dsh-wb400-guard",
+  "version": "0.1.0",
+  "description": "Fixes the WorkBuddy CN gateway 400 (code 11128) when using DeepSeek Harness with a domestic WorkBuddy reverse proxy.",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "workbuddy",
+    "codebuddy",
+    "gateway",
+    "400",
+    "11128"
+  ],
+  "license": "MIT",
+  "author": "curo22",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "install.mjs",
+    "verify-live.mjs",
+    "test",
+    "scripts"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "install:profile": "node install.mjs",
+    "verify:live": "node verify-live.mjs",
+    "verify:real-body": "node scripts/verify-real-body.mjs",
+    "verify:pipeline": "node scripts/verify-pipeline.mjs"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/curo22/dsh-wb400-guard.git"
+  },
+  "bugs": {
+    "url": "https://github.com/curo22/dsh-wb400-guard/issues"
+  },
+  "homepage": "https://github.com/curo22/dsh-wb400-guard#readme"
+}
