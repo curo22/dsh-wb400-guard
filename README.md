@@ -164,6 +164,9 @@ node scripts/verify-real-body.mjs
 
 # 只读日志，看真实流量有没有被改写
 node scripts/read-guard-log.mjs
+
+# 装完重启后跑这个：一条命令回答「修复此刻在不在工作」
+node scripts/health-check.mjs
 ```
 
 ## 不用手改 `dsh-workbuddy-connect`
@@ -176,6 +179,8 @@ dsh-workbuddy-connect 原版 → 组装 body（@ 原样保留）→ globalThis.f
 
 如果你之前直接改过 `node_modules/dsh-workbuddy-connect/lib/host-heartbeat-*.js`，可以把那份改动还原成原版 —— 修复在 DSH 的 profile 层，插件包升级不会覆盖它。
 
+还原之后要**完全退出 DSH Desktop 再打开**。进程里跑着的仍是启动那一刻加载的代码：磁盘文件改回原版不会让改动消失，它要等到下次启动才失效。反过来也一样，装了插件不重启就不会生效。
+
 ## 已知限制
 
 - **网关改了规则**（不再因 `@` 拦截）时插件空转，不影响功能。`verify-live.mjs` 会告诉你原样请求已经能过。
@@ -183,6 +188,7 @@ dsh-workbuddy-connect 原版 → 组装 body（@ 原样保留）→ globalThis.f
 - **429 限流与本插件无关**。那是额度用尽，等额度重置。
 - **`stream: false` 会被国内网关拒为 `11101`**，这个码跟 `11128` 不是一回事。本插件只解决 `11128`。
 - **国际网关**默认不防护。如果哪天 `www.workbuddy.ai` 也开始校验 `@`，往 `gatewayHosts` 里加一条即可（`mode` 建议设为 `all`）。
+- **两个插件同时包装 `fetch` 时**后装的在外层。本插件用 `Symbol.for('dsh-wb400-guard.installed')` 保证只装一层，重复调用返回同一个卸载函数，卸载时也不会覆盖别人后来装的 `fetch`。
 
 ## 开发
 
