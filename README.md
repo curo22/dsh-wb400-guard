@@ -174,7 +174,7 @@ cd dsh-wb400-guard
 node install.mjs
 ```
 
-它做四件事：拷文件到 `%USERPROFILE%\.dsh\profiles\desktop\vendor\dsh-wb400-guard`、往 profile 的 `package.json` 写 `dependencies` 与 `dsh.profile.bundles`、建 junction 让模块可解析、跑一遍产物的 17 条自测。
+它做四件事：拷文件到 `%USERPROFILE%\.dsh\profiles\desktop\vendor\dsh-wb400-guard`、往 profile 的 `package.json` 写 `dependencies` 与 `dsh.profile.bundles`、建 junction 让模块可解析、跑一遍产物的 29 条自测。
 
 指定别的 profile：
 

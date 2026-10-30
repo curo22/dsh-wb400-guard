@@ -129,7 +129,7 @@ cd dsh-wb400-guard
 node install.mjs
 ```
 
-It copies files into `%USERPROFILE%\.dsh\profiles\desktop\vendor\dsh-wb400-guard`, writes `dependencies` and `dsh.profile.bundles` into the profile's `package.json`, creates a junction so the module resolves, and runs the 17 shipped tests.
+It copies files into `%USERPROFILE%\.dsh\profiles\desktop\vendor\dsh-wb400-guard`, writes `dependencies` and `dsh.profile.bundles` into the profile's `package.json`, creates a junction so the module resolves, and runs the 29 shipped tests.
 
 A different profile:
 
@@ -190,7 +190,7 @@ Tunable in `cordis.patch.yml`:
 ## Verify
 
 ```powershell
-# 25 shipped tests: contract, rewriting (both triggers), host matching, idempotence, fail-open, install/uninstall, config
+# 29 shipped tests: contract, rewriting (all three trigger scenes), host matching, idempotence, fail-open, install/uninstall, config
 node --test
 
 # Against the real China gateway (needs WorkBuddy desktop signed in on this machine)
