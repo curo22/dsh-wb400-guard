@@ -19,3 +19,8 @@ package.json.bak-*
 Thumbs.db
 .vscode/
 .idea/
+
+# 本地推广素材（抖音图文渲染产物与中间文件）
+promo-dy/out/
+promo-dy/*.png
+promo-dy/抖音图文-6张.zip

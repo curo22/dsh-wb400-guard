@@ -98,7 +98,15 @@ fetch 是唯一既精准、又能覆盖插件内部 11128 重试阶梯的位置�
 
 零运行时依赖，只用 node 内置模块。需要 Node `^22.19.0 || >=24.0.0`。
 
-### 一条命令
+### 用 DSH 自己的命令装（推荐）
+
+```bash
+dsh plugin --profile web add github:curo22/dsh-wb400-guard
+```
+
+把 `web` 换成你自己的 profile 名（桌面版是 `desktop`）。
+
+### 或者 clone 下来跑
 
 ```powershell
 git clone https://github.com/curo22/dsh-wb400-guard.git

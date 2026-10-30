@@ -98,7 +98,15 @@ fetch is the only place that is both narrow and complete — it also covers the 
 
 Zero runtime dependencies, node built-ins only. Requires Node `^22.19.0 || >=24.0.0`.
 
-### One command
+### With the DSH CLI (recommended)
+
+```bash
+dsh plugin --profile web add github:curo22/dsh-wb400-guard
+```
+
+Swap `web` for your own profile name (the desktop app uses `desktop`).
+
+### Or clone and run
 
 ```powershell
 git clone https://github.com/curo22/dsh-wb400-guard.git

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="base.css">
+</head>
+<body>
+  <div class="head">
+    <div class="tag">DSH · 踩坑实录</div>
+    <div class="page">3/6</div>
+  </div>
+
+  <div class="body">
+    <div style="font-size:34px;color:#6e7b8b;letter-spacing:.1em;font-weight:700;margin-bottom:40px;">根因离谱到你猜不到</div>
+
+    <h1 style="font-size:90px;">是 system 提示词里<br>的一个 <em class="at" style="font-size:114px;">@</em> 字符</h1>
+
+    <div class="sub" style="margin-top:54px;font-size:37px;">
+      国内网关会扫 system 消息，看到 <span class="at" style="font-size:40px;">@</span> 就判成非授权渠道，直接回 11128。
+    </div>
+
+    <div style="margin-top:52px;border-left:6px solid #ff6b6b;padding-left:38px;">
+      <div style="font-size:33px;line-height:1.72;color:#8b949e;">
+        截到 25860 字符 → 200<br>
+        截到 25865 字符 → 400
+      </div>
+      <div style="font-size:31px;color:#5c6675;margin-top:20px;">差 5 个字符，正好跨过一个 @</div>
+    </div>
+  </div>
+
+  <div class="foot">不是体积、不是工具太多、不是请求头</div>
+</body>
+</html>

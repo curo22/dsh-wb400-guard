@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="base.css">
+</head>
+<body class="solve">
+  <div class="head">
+    <div class="tag">DSH · 踩坑实录</div>
+    <div class="page">4/6</div>
+  </div>
+
+  <div class="body">
+    <div style="font-size:34px;color:#6e7b8b;letter-spacing:.1em;font-weight:700;margin-bottom:44px;">我干的事</div>
+
+    <h1 style="font-size:86px;">写了个<br><em class="green">DSH 插件</em></h1>
+
+    <div class="sub" style="font-size:37px;margin-top:52px;">
+      在发出去之前，把 system 提示词里的 <span class="at" style="font-size:41px;">@</span> 换成 <span class="mono green" style="font-size:39px;">(at)</span>。
+    </div>
+    <div class="sub" style="font-size:35px;margin-top:22px;color:#7b8998;">
+      语义一字未动，网关看着就是个普通字符。
+    </div>
+
+    <div style="margin-top:56px;display:flex;flex-direction:column;gap:26px;">
+      <div style="display:flex;gap:18px;font-size:32px;color:#9aa7b6;line-height:1.5;">
+        <span class="green" style="font-weight:800;flex:0 0 auto;">不碰</span><span>你的内核和配置</span>
+      </div>
+      <div style="display:flex;gap:18px;font-size:32px;color:#9aa7b6;line-height:1.5;">
+        <span class="green" style="font-weight:800;flex:0 0 auto;">不改</span><span>你的账号和密钥</span>
+      </div>
+      <div style="display:flex;gap:18px;font-size:32px;color:#9aa7b6;line-height:1.5;">
+        <span class="green" style="font-weight:800;flex:0 0 auto;">不动</span><span>额度，不绕收费</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">钩在 fetch 层，网关规则一变它自己就空转</div>
+</body>
+</html>

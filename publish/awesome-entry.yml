@@ -1,0 +1,6 @@
+url: https://github.com/curo22/dsh-wb400-guard
+name: curo22/dsh-wb400-guard
+category: dev
+description:
+  en: Rewrites the @ character inside system messages before requests leave the process, which stops the WorkBuddy China gateway from rejecting them with HTTP 400 code 11128.
+  zh: 在请求发出前把 system 消息里的 @ 字符改写掉，避免 WorkBuddy 国内网关以 HTTP 400 code 11128 拦截。
