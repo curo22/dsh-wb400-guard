@@ -203,6 +203,14 @@ node --test
 
 两个脚本的分工：`install.mjs` 拷贝到 `profile\vendor`，适合分发；`link-local.ps1` 用 junction 指向本仓库，适合开发。
 
+`install.mjs` 是拷贝而不是链接，所以拉了新代码之后要重跑一次，vendor 才会跟上。想知道有没有落后：
+
+```powershell
+node scripts/compare-vendor.mjs . "$env:USERPROFILE\.dsh\profiles\desktop\vendor\dsh-wb400-guard"
+```
+
+逐文件哈希比对，列出内容不同和缺失的文件。全一致时只有一句「vendor 与仓库完全一致」。
+
 推送到 GitHub：
 
 ```powershell

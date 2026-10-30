@@ -120,7 +120,19 @@ if (uninstall) {
 /* ---------------------------------------------------------------- 安装 */
 
 // 1. 拷文件到 vendor
-const ENTRIES = ['lib', 'cordis.patch.yml', 'package.json', 'README.md', 'LICENSE', 'test', 'scripts', 'verify-live.mjs'];
+// 这份清单要与 scripts/compare-vendor.mjs 的同名常量保持一致，
+// 否则「vendor 是否与仓库一致」的检查会误报。
+const ENTRIES = [
+  'lib',
+  'cordis.patch.yml',
+  'package.json',
+  'README.md',
+  'LICENSE',
+  'test',
+  'scripts',
+  'verify-live.mjs',
+  'install.mjs',
+];
 mkdirSync(vendorDir, { recursive: true });
 let copied = 0;
 for (const entry of ENTRIES) {
