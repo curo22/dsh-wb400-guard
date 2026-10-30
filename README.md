@@ -3,7 +3,7 @@
 **中文** | [English](README.en.md)
 
 [![CI](https://github.com/curo22/dsh-wb400-guard/actions/workflows/test.yml/badge.svg)](https://github.com/curo22/dsh-wb400-guard/actions/workflows/test.yml)
-[![tests](https://img.shields.io/badge/tests-17%20passing-brightgreen)](test/shipped.test.mjs)
+[![tests](https://img.shields.io/badge/tests-25%20passing-brightgreen)](test/shipped.test.mjs)
 [![dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)](package.json)
 [![node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-green)](package.json)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -35,56 +35,96 @@
 
 ## 为什么会被拦
 
-DSH 内核 `@deepseek-ai/dsh-file-reference` 会往 system prompt 里注入一段文件引用说明：
-
-```
-Tokens prefixed with @ are paths the user explicitly referenced. ...
-@"..." quotes a path containing spaces.
-```
-
-国内网关 `copilot.tencent.com` 对 system 消息做通道校验，看到字面量 `@` 就判成非授权渠道调用：
+国内网关 `copilot.tencent.com` 在服务端对 system 消息做通道校验，命中规则就回：
 
 ```json
 {"code":11128,"msg":"Illegal API invocation from an unapproved channel"}
 ```
 
-插件包把这条错误包装成上面那句「请求被拦截」。
+插件包把这条错误包装成「请求被拦截，请重新发送」。**触发这条规则的有两个互不相关的来源**，DSH 默认两个都带着，所以插件两个都要处理。
 
-国际网关不做这个校验，所以同一份请求发到 `www.workbuddy.ai` 是 200。
+### 触发源一：文件引用说明里的那一段字
+
+`@deepseek-ai/dsh-file-reference` 会往 system prompt 里注入这段：
+
+```
+Tokens prefixed with @ are paths the user explicitly referenced. Relative paths
+resolve from the workspace root; absolute paths identify files or directories on the
+host. ... @\"...\" quotes a path containing spaces.
+```
+
+它不是「只要出现 @ 就拦」。逐词删词消融能直接看出来：这段话里删掉 `Tokens` `prefixed` `with` `are` `paths` `the` `user` `explicitly` `Relative` `resolve` `from` `workspace` 里的**任何一个词**，请求立刻变 200；删掉后半截的词（`referenced.` `root;` `absolute` `identify` `files` `or`）照样 400。
+
+也就是说网关匹配的是**前段连续词组 + 那个 @ 字形**这个组合，不是单个字符。同一份文本把 @ 去掉，或换成等义的 `(at)`，都变 200。
+
+### 触发源二：内核身份句
+
+`@deepseek-ai/dsh-system-prompt` 的**官方发布版**默认 `includeHarnessIdentity = true`，会在 system 最前面放一句：
+
+```
+You are an AI agent powered by DeepSeek Harness.
+```
+
+（`DeepSeek` 和 `Harness` 之间是一个零宽空格 U+200B。）
+
+这句只要**位于 system 消息开头**就会被拦。放到句子中间、放到消息尾部、前面先垫一行别的文字，都不拦。零宽字符、前置普通空格、前置 BOM 都绕不过去。
+
+本机这个坑被 `~/.dsh/prompt-inject.md` 顶掉了，所以有些人只撞到触发源一；没写过注入文件的用户两个都会撞。这也是为什么另一个插件只修了身份句、用户升级后照样报错——两个源必须一起修。
+
+国际网关 `www.workbuddy.ai` 不做这个校验，同一份请求发过去是 200。
 
 ## 定位过程（可复现）
 
-判定依据是内容，不是长度：
+全部结论都是对真实网关做 A/B 打出来的，同账号同请求头，只换 body 里的 system 文本。
+
+**触发源一**：
 
 | 实验 | 结果 |
 |---|---|
-| 原文截到 25860 字符 | 200 |
-| 原文截到 25865 字符 | 400 / 11128 |
-| 纯 `a` 填充到 60000 字符 | 200 |
-| 纯中文填充到 30000 字符 | 200 |
-| 把触发块重复 100 / 400 次 | 200 |
-| `@` 换成 `(at)` | **200** |
+| 真实 system 原文（含 @） | 400 / 11128 |
+| 同一份文本把 @ 去掉 | **200** |
+| 同一份文本 @ 换成 `(at)` | **200** |
+| 只去掉第一个 @（还剩一个） | **200** |
+| 只去掉第二个 @（还剩一个） | 400 |
+| 短句 `Tokens prefixed with @ are paths.` | **200**（单独发不触发） |
+| 单词 @、`@ ` + 纯填充 | 200 |
+| @ 放进 user 消息 | 200（只在 system 里触发） |
+| 原文前缀截到 110 字符 | 200 |
+| 原文前缀截到 112 字符（末尾正好是 `workspace root;`） | 400 |
+| 同样 112 字符，把 @ 换成 `x` | 200 |
+| 同样 112 字符，纯 `x` 填充 | 200 |
+| 300 字符 = 弱内容 + 纯填充 | 200（不是长度阈值） |
+| 逐词删词（前半段任一词） | **全部 200** |
+| 逐词删词（后半段任一词） | 全部 400 |
 | 换成全角 `＠` | 400（网关折回半角再判） |
-| `@` 放进 user 消息 | 200（只在 system 里触发） |
 | 同一 body 连发 5 次 | 5 次全 11128，完全确定性 |
 
-最小触发块是原文里 `Tokens prefixed with @` 那一段，117 字符。单独发也拦。
+**触发源二**：
 
-滑窗实验把触发点收到 25000–30000 这个区间，段级替换实验排除了「某一整段敏感内容」的可能。最后用码点级比对确认：触发源就是 `@` 这个字形本身。
+| 实验 | 结果 |
+|---|---|
+| 身份句在 system 开头 | 400 / 11128 |
+| 身份句放句子中间 | **200** |
+| 身份句放消息尾部 | **200** |
+| 身份句前面先垫一行别的文字 | **200** |
+| 身份句前加普通空格 / BOM | 400（绕不过） |
+| `DeepSeek` 与 `Harness` 之间加零宽字符 | 400（绕不过） |
+| 改成分号 `DeepSeek-Harness.` | **200** |
+| 改成分号 `DeepSeek.Harness.` | **200** |
+| `You are the AI agent ...` | **200** |
+| 换词序 `... that DeepSeek Harness powers.` | **200** |
+| 换成 `WorkBuddy` | **200** |
+
+**跟长度无关、跟请求头无关、跟工具数量无关**：`max_tokens` 从 1 扫到 1048576 全 200；94 个工具的完整请求头一字不改；纯填充到 60000 字符也不拦。
 
 ## 插件做什么
 
-在宿主进程包一层 `globalThis.fetch`，只对发往 `copilot.tencent.com` 的请求，把 **system / developer 消息里**的 `@` 换成等义写法 `(at)`。user、assistant、tool 消息一个字不动，别的 API（DeepSeek、OpenAI、Anthropic、WorkBuddy 国际版）一律原样透传。
+在宿主进程包一层 `globalThis.fetch`，只对发往 `copilot.tencent.com` 的请求，对 **system / developer 消息**做两件事：
 
-`(at)` 在这句话里语义等价（描述「以 @ 开头的 token 是路径」），读起来仍然通顺：
+1. 把触发源一那段文本里的 @ 换成等义写法 `(at)`；
+2. 把开头的身份句 `You are an AI agent powered by DeepSeek Harness.` 换成 `You are an AI agent powered by DeepSeek-Harness.`（空格改连字符）。
 
-```
-Tokens prefixed with (at) are paths the user explicitly referenced. ...
-(at)"..." quotes a path containing spaces.
-```
-
-模型看到的指令含义没有变化，网关看到的不再有那个字符。
-
+两处都是语义等价改写，模型读到的指令含义没变，网关匹配不到那两个指纹。user、assistant、tool 消息一个字不动；别的 API（DeepSeek、OpenAI、Anthropic、WorkBuddy 国际版）一律原样透传。
 ## 为什么挂在 fetch 层
 
 试过另外两个位置，都不行：
@@ -175,7 +215,7 @@ New-Item -ItemType Junction -Path "$prof\node_modules\dsh-wb400-guard" -Target "
 ## 验证
 
 ```powershell
-# 产物自测 17 条：契约、改写、host 判定、幂等、fail-open、安装卸载、配置
+# 产物自测 25 条：契约、改写（两个触发源）、host 判定、幂等、fail-open、安装卸载、配置
 node --test
 
 # 对真实国内网关验证（需要本机已登录 WorkBuddy 桌面版）
@@ -193,6 +233,9 @@ node verify-live.mjs
 另外几个更贴现场的脚本：
 
 ```powershell
+# 两个触发源各自单独发、叠加发，五组真实网关对照
+node scripts/verify-identity-live.mjs
+
 # 端到端：原版 dsh-workbuddy-connect 组装 → guard 改写 → 真实网关
 node scripts/verify-pipeline.mjs
 

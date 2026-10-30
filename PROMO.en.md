@@ -12,7 +12,7 @@ Copy, paste, post. Everything points at <https://github.com/curo22/dsh-wb400-gua
 
 - `dsh-wb400-guard` — stop the 400 that kills every turn on WorkBuddy's China gateway
 - One command to fix "请求被拦截，请重新发送"
-- A WorkBuddy China-gateway patch for DeepSeek Harness: zero dependencies, 17 tests
+- A WorkBuddy China-gateway patch for DeepSeek Harness: zero dependencies, 25 tests
 
 **Subtitle**
 
@@ -20,7 +20,7 @@ Copy, paste, post. Everything points at <https://github.com/curo22/dsh-wb400-gua
 
 **One-sentence description (bios, issue replies, recommendations)**
 
-> DSH fails on every turn through WorkBuddy's China gateway with `400 请求被拦截`. The cause is a single `@` in the system prompt. This plugin rewrites it to `(at)` at the fetch layer — zero dependencies, fail-open, 17 tests.
+> DSH fails on every turn through WorkBuddy's China gateway with `400 请求被拦截`. The cause is two fingerprints in the system prompt that the gateway recognises. This plugin neutralises both fingerprints at the fetch layer — zero dependencies, fail-open, 25 tests.
 
 ---
 
@@ -41,7 +41,7 @@ Copy, paste, post. Everything points at <https://github.com/curo22/dsh-wb400-gua
 > cd dsh-wb400-guard && node install.mjs
 > ```
 >
-> Restart. Done. Zero dependencies, 17 tests, fails open.
+> Restart. Done. Zero dependencies, 25 tests, fails open.
 > 👉 https://github.com/curo22/dsh-wb400-guard
 
 **Version B — lead with the technical hook**
@@ -117,7 +117,7 @@ All three blow past the threshold and all three pass. **It's content, not length
 
 I dumped the codepoints around offset 25,855–25,874. Plain ASCII, nothing visible.
 
-But the minimal trigger is a different slice — 117 characters starting at `Tokens prefixed with @`.
+But the gateway does not match a single character — it matches a run of consecutive words. Delete any word from the opening of that paragraph and it passes.
 
 Replace that `@` with `(at)`: **200.**
 

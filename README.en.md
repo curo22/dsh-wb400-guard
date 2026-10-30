@@ -3,7 +3,7 @@
 [中文](README.md) | **English**
 
 [![CI](https://github.com/curo22/dsh-wb400-guard/actions/workflows/test.yml/badge.svg)](https://github.com/curo22/dsh-wb400-guard/actions/workflows/test.yml)
-[![tests](https://img.shields.io/badge/tests-17%20passing-brightgreen)](test/shipped.test.mjs)
+[![tests](https://img.shields.io/badge/tests-25%20passing-brightgreen)](test/shipped.test.mjs)
 [![dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)](package.json)
 [![node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-green)](package.json)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -68,7 +68,7 @@ The trigger is content, not length:
 | Put `@` in a user message instead | 200 (only system messages trigger) |
 | Resend the same body 5 times | 5 × 11128, fully deterministic |
 
-The minimal trigger is that one 117-character slice starting at `Tokens prefixed with @`. Send it alone and it still gets blocked.
+The trigger is the opening run of words in that paragraph plus the literal `@` glyph, as a combination — not the character alone. A 112-character prefix is blocked; the same 112 characters with `@` replaced by `x` pass. Deleting any one of the opening words also passes.
 
 A sliding window narrowed the trigger to offsets 25,000–30,000; section-level substitution ruled out "one sensitive paragraph". A codepoint-level comparison confirmed it: the trigger is that single glyph.
 
@@ -175,7 +175,7 @@ Tunable in `cordis.patch.yml`:
 ## Verify
 
 ```powershell
-# 17 shipped tests: contract, rewriting, host matching, idempotence, fail-open, install/uninstall, config
+# 25 shipped tests: contract, rewriting (both triggers), host matching, idempotence, fail-open, install/uninstall, config
 node --test
 
 # Against the real China gateway (needs WorkBuddy desktop signed in on this machine)
@@ -193,6 +193,9 @@ node verify-live.mjs
 Closer-to-production scripts:
 
 ```powershell
+# Both triggers, alone and stacked — five live A/B cases
+node scripts/verify-identity-live.mjs
+
 # End to end: stock dsh-workbuddy-connect assembles → guard rewrites → real gateway
 node scripts/verify-pipeline.mjs
 

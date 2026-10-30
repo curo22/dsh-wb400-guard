@@ -253,3 +253,108 @@ test('apply 装好后 dispose 能还原', () => {
     globalThis.fetch = original;
   }
 });
+
+/* ------------------------------------------- 第二个触发源：内核身份句
+
+ * 官方 @deepseek-ai/dsh-system-prompt 默认 includeHarnessIdentity = true，
+ * 会在 system 最前面放 "You are an AI agent powered by DeepSeek\u200B Harness."
+ * 国内网关只在这一句位于消息开头时回 400 / 11128（放句中或尾部不拦）。
+ * 实测改写法：空格换连字符，语义不变，网关放行。
+ */
+
+const IDENTITY = 'You are an AI agent powered by DeepSeek' + String.fromCharCode(0x200b) + ' Harness.';
+
+test('hasIdentitySentence 只认消息开头的身份句', () => {
+  assert.equal(guard.hasIdentitySentence(IDENTITY + ' Be concise.'), true);
+  assert.equal(guard.hasIdentitySentence('You are an AI agent powered by DeepSeek Harness. go'), true);
+  assert.equal(guard.hasIdentitySentence('   ' + IDENTITY), true, '前导空格仍应命中');
+  assert.equal(guard.hasIdentitySentence(String.fromCharCode(0xfeff) + IDENTITY), true, '前导 BOM 仍应命中');
+  assert.equal(guard.hasIdentitySentence('\n\n' + IDENTITY), true, '前导换行仍应命中');
+
+  assert.equal(guard.hasIdentitySentence('Intro. ' + IDENTITY + ' Then more.'), false, '句中不拦，不该改');
+  assert.equal(guard.hasIdentitySentence('xx. ' + IDENTITY), false, '尾部不拦，不该改');
+  assert.equal(guard.hasIdentitySentence('You are an AI agent powered by DeepSeek Harness go'), false, '无句尾不拦');
+  assert.equal(guard.hasIdentitySentence('You are a helpful assistant.'), false);
+  assert.equal(guard.hasIdentitySentence(''), false);
+  assert.equal(guard.hasIdentitySentence(null), false);
+});
+
+test('neutralizeIdentity 换成连字符写法且保留前导与后文', () => {
+  assert.equal(
+    guard.neutralizeIdentity(IDENTITY + ' Be concise.'),
+    'You are an AI agent powered by DeepSeek-Harness. Be concise.',
+  );
+  assert.equal(
+    guard.neutralizeIdentity('\n\n' + IDENTITY + ' tail'),
+    '\n\nYou are an AI agent powered by DeepSeek-Harness. tail',
+    '前导空白要保留',
+  );
+});
+
+test('neutralizeIdentity 对不该改的文本返回原引用', () => {
+  const noHit = 'You are a helpful assistant. Nothing to see.';
+  assert.equal(guard.neutralizeIdentity(noHit), noHit, '未命中必须返回同一引用');
+  const mid = 'Intro. ' + IDENTITY + ' Then more.';
+  assert.equal(guard.neutralizeIdentity(mid), mid);
+});
+
+test('neutralizeIdentity 幂等', () => {
+  const once = guard.neutralizeIdentity(IDENTITY + ' tail.');
+  assert.equal(guard.neutralizeIdentity(once), once);
+  assert.equal(guard.hasIdentitySentence(once), false);
+});
+
+test('rewriteJsonBody 同时处理两个触发源', () => {
+  const raw = JSON.stringify({
+    model: 'deepseek-v4.1-flash',
+    stream: true,
+    max_tokens: 16,
+    messages: [
+      { role: 'system', content: IDENTITY + '\n\n' + KERNEL_PROMPT },
+      { role: 'user', content: 'mail me at a@b.com' },
+    ],
+  });
+  const out = guard.rewriteJsonBody(raw);
+  assert.equal(out.changed, true);
+  const parsed = JSON.parse(out.body);
+  const sys = parsed.messages[0].content;
+  assert.equal(guard.hasIdentitySentence(sys), false, '身份句要被中和');
+  assert.equal(countAt(sys), 0, '两个 @ 都要处理');
+  assert.equal(parsed.messages[1].content, 'mail me at a@b.com', 'user 消息一个字都不许动');
+});
+
+test('只有身份句没有 @ 时也会改写（早退条件不能只看 @）', () => {
+  const raw = JSON.stringify({
+    model: 'deepseek-v4.1-flash',
+    stream: true,
+    messages: [
+      { role: 'system', content: IDENTITY + ' Be concise.' },
+      { role: 'user', content: 'hi' },
+    ],
+  });
+  assert.equal(raw.includes('@'), false, '这个 body 里本来就没有 @');
+  const out = guard.rewriteJsonBody(raw);
+  assert.equal(out.changed, true, '没有 @ 也必须处理身份句');
+  assert.equal(guard.hasIdentitySentence(JSON.parse(out.body).messages[0].content), false);
+});
+
+test('含身份句但 role=user 时不改', () => {
+  const raw = JSON.stringify({
+    model: 'deepseek-v4.1-flash',
+    messages: [{ role: 'user', content: IDENTITY }],
+  });
+  const out = guard.rewriteJsonBody(raw);
+  assert.equal(out.changed, false);
+  assert.equal(out.body, raw);
+});
+
+test('mode=all 时身份句仍然只按语义改，不破坏正文', () => {
+  const raw = JSON.stringify({
+    model: 'deepseek-v4.1-flash',
+    messages: [{ role: 'system', content: IDENTITY + ' 联系 a@b.com' }],
+  });
+  const parsed = JSON.parse(guard.rewriteJsonBody(raw, 'all').body);
+  const sys = parsed.messages[0].content;
+  assert.equal(guard.hasIdentitySentence(sys), false);
+  assert.equal(countAt(sys), 0, 'mode=all 会把正文里的 @ 也换掉，这是既定行为');
+});
