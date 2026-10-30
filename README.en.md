@@ -220,9 +220,11 @@ Still broken after install? Check in this order.
 
 **2. Does the plugin itself work?** Run `node verify-live.mjs`. It bypasses DSH's load path and hits the real gateway with real credentials. If its "after the guard" line isn't 200 either, the problem is the plugin or the credential, not the install.
 
-**3. Did rewriting actually happen?** Run `node scripts/health-check.mjs`. It reads install state, the host load line, the guard log's rewrite counter and the host log's block records, then tells you which case you're in. If it says the plugin is ready but no China-route traffic has passed, send one message on a China-route model and run it again.
+**3. Did something else get there first?** An earlier fix edited `dsh-workbuddy-connect`'s source directly. That edit rewrites the `@` before this plugin ever sees it, so the rewrite counter stays at 0 and the plugin looks dead. `health-check.mjs` scans `node_modules/dsh-workbuddy-connect/lib/*.js` for the telltale identifiers and says so when it finds them. The same thing happens when the file on disk is already restored but the process has not restarted: the old code still lives in memory. One restart settles it.
 
-**4. Did the gateway change its rules?** If the "before the guard" line in `verify-live.mjs` also turns 200, the gateway no longer blocks on `@`. The plugin is idle, which is fine.
+**4. Did rewriting actually happen?** Run `node scripts/health-check.mjs`. It reads install state, the host load line, the guard log's rewrite counter and the host log's block records, then tells you which case you're in. If it says the plugin is ready but no China-route traffic has passed, send one message on a China-route model and run it again.
+
+**5. Did the gateway change its rules?** If the "before the guard" line in `verify-live.mjs` also turns 200, the gateway no longer blocks on `@`. The plugin is idle, which is fine.
 
 ## FAQ
 

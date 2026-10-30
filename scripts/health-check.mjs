@@ -96,6 +96,38 @@ const blockedAfterInstall = hostInstallAt
   ? blockedLines.filter((l) => (l.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+)/)?.[1] ?? '') >= hostInstallAt)
   : blockedLines;
 
+/* ------------------------------------------------- 3b. 有没有别处手改过插件的痕迹 */
+
+// 早期修法是直接改 dsh-workbuddy-connect 的源码。那份改动会先于本插件把 @ 换掉，
+// 结果本插件看不到 @、改写计数永远是 0，而用户以为没生效。
+// 这里只做识别，不动任何文件。
+const HANDMARKERS = [
+  'neutralizeFileReferencePrompt',
+  'CN_FILE_REFERENCE_PROMPT',
+  'repairChannelRejection',
+  'wireLog',
+];
+
+function scanHandPatches() {
+  const dir = join(profileDir, 'node_modules', 'dsh-workbuddy-connect', 'lib');
+  if (!existsSync(dir)) return { dir, found: [] };
+  const found = [];
+  for (const name of readdirSync(dir)) {
+    if (!name.endsWith('.js')) continue;
+    let text;
+    try {
+      text = readFileSync(join(dir, name), 'utf8');
+    } catch {
+      continue;
+    }
+    const hits = HANDMARKERS.filter((m) => text.includes(m));
+    if (hits.length > 0) found.push({ name, hits });
+  }
+  return { dir, found };
+}
+
+const handPatches = scanHandPatches();
+
 /* ---------------------------------------------------------------- 4. wire log（可选） */
 
 const wireLog = join(dshHome, '.workbuddy-wire.log');
@@ -127,12 +159,24 @@ line('最近一次安装', lastInstall ? `${at(lastInstall.at)}  hosts=${(lastIn
 line('宿主日志确认行', lastInstallLine ? lastInstallLine.trim().slice(0, 96) : '（无，说明宿主没加载插件）');
 
 console.log('\n=== 实际改写 ===');
-line('本次安装后改写', rewrites.length === 0 ? '0 次' : `${rewrites.length} 次`);
-if (rewrites.length > 0) {
+line('本次安装后改写', rewrites.length === 0 ? '0 次' : `${rewrites.length} 次`);if (rewrites.length > 0) {
   const last = rewrites[rewrites.length - 1];
   line('最近一次', `${at(last.at)}  bytesIn=${last.bytesIn ?? '-'}  mode=${last.mode ?? '-'}`);
 }
 if (cnRequests !== null) line('wire log 国内请求', `${cnRequests} 条`);
+
+console.log('\n=== 别处的手改 ===');
+if (!existsSync(handPatches.dir)) {
+  line('dsh-workbuddy-connect', '没装，跳过');
+} else if (handPatches.found.length === 0) {
+  line('dsh-workbuddy-connect', '干净，没有手改痕迹');
+} else {
+  for (const f of handPatches.found) {
+    line(f.name, `含 ${f.hits.join(' / ')}`);
+  }
+  console.log('  这份手改会先于本插件把 @ 换掉，本插件的改写计数因此恒为 0。');
+  console.log('  两个办法：留着它（功能重叠但不冲突），或者重装插件恢复原版后重跑 install.mjs。');
+}
 
 console.log('\n=== 拦截 ===');
 line('宿主日志 11128', blockedLines.length === 0 ? '0 条' : `共 ${blockedLines.length} 条`);
@@ -148,14 +192,22 @@ if (!installedDep || !listedBundle || !shimPresent) {
 } else if (blockedAfterInstall.length > 0) {
   console.log('  加载了但没拦住。跑 node verify-live.mjs 看插件本身是否有效；');
   console.log('  有效的话把配置里的 mode 改成 all 再试。');
+} else if (handPatches.found.length > 0) {
+  console.log('  插件就位，但 dsh-workbuddy-connect 里还有手改补丁，它抢先一步把 @ 换掉了。');
+  console.log('  所以本插件 0 次改写是正常的，不是没生效 —— 修复在别处完成，功能等价。');
+  console.log('  想让这个插件接管：把 dsh-workbuddy-connect 恢复原版，再跑 node install.mjs 重启。');
 } else if (rewrites.length > 0) {
   console.log('  修复在工作：已经实际改写并放行过请求，安装后没有新的 11128。');
 } else if (cnRequests === 0) {
   console.log('  已就绪，但还没有国内路由的流量经过。用国内版模型发一条消息后再跑一次。');
 } else {
-  console.log('  宿主已安装，但 0 次改写、也没有新的 11128。两种可能：');
-  console.log('  1. 请求到 fetch 时已经没有 @ 了 —— 比如之前手改过 dsh-workbuddy-connect，');
-  console.log('     那份改动还在运行中的进程里。它重启后就消失，插件会接管。');
+  console.log('  宿主已装好、也没有新的 11128，但改写计数是 0。两种可能：');
+  if (handPatches.found.length === 0 && existsSync(handPatches.dir)) {
+    console.log('  1. 磁盘上的插件已经是原版，但正在跑的进程是更早启动的，内存里还留着旧的');
+    console.log('     手改代码，它先把 @ 换掉了。完全退出 DSH Desktop 再打开，本插件就接管。');
+  } else {
+    console.log('  1. 请求到 fetch 时已经没有 @ 了，上游有别的环节先处理过。');
+  }
   console.log('  2. 网关不再因为 @ 拦截 —— 跑 node verify-live.mjs，若「原样」那行也通过即属此类，');
   console.log('     插件处于空转，不影响使用。');
 }
