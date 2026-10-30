@@ -184,6 +184,27 @@ dsh-workbuddy-connect 原版 → 组装 body（@ 原样保留）→ globalThis.f
 - **`stream: false` 会被国内网关拒为 `11101`**，这个码跟 `11128` 不是一回事。本插件只解决 `11128`。
 - **国际网关**默认不防护。如果哪天 `www.workbuddy.ai` 也开始校验 `@`，往 `gatewayHosts` 里加一条即可（`mode` 建议设为 `all`）。
 
+## 开发
+
+```powershell
+# 跑测试（Node 24 上 `node --test test/` 不认目录参数，直接不带参数让它自动发现）
+node --test
+
+# 把自己的 profile 指向本仓库，改代码即时生效（不需要每次拷贝）
+.\scripts\link-local.ps1
+.\scripts\link-local.ps1 -Remove   # 拆掉
+```
+
+两个脚本的分工：`install.mjs` 拷贝到 `profile\vendor`，适合分发；`link-local.ps1` 用 junction 指向本仓库，适合开发。
+
+推送到 GitHub：
+
+```powershell
+.\scripts\push-github.ps1
+```
+
+会依次检查工作区干净、SSH 认证、远端仓库存在，再推。哪一步不通就停在哪一步并说清原因。
+
 ## 许可
 
 MIT
