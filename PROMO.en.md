@@ -12,7 +12,7 @@ Copy, paste, post. Everything points at <https://github.com/curo22/dsh-wb400-gua
 
 - `dsh-wb400-guard` — stop the 400 that kills every turn on WorkBuddy's China gateway
 - One command to fix "请求被拦截，请重新发送"
-- A WorkBuddy China-gateway patch for DeepSeek Harness: zero dependencies, 25 tests
+- A WorkBuddy China-gateway patch for DeepSeek Harness: zero dependencies, 29 tests
 
 **Subtitle**
 
@@ -20,7 +20,7 @@ Copy, paste, post. Everything points at <https://github.com/curo22/dsh-wb400-gua
 
 **One-sentence description (bios, issue replies, recommendations)**
 
-> DSH fails on every turn through WorkBuddy's China gateway with `400 请求被拦截`. The cause is two fingerprints in the system prompt that the gateway recognises. This plugin neutralises both fingerprints at the fetch layer — zero dependencies, fail-open, 25 tests.
+> DSH fails on every turn through WorkBuddy's China gateway with `400 请求被拦截`. The cause is two fingerprints in the system prompt that the gateway recognises. This plugin neutralises both fingerprints at the fetch layer — zero dependencies, fail-open, 29 tests.
 
 ---
 
@@ -41,7 +41,7 @@ Copy, paste, post. Everything points at <https://github.com/curo22/dsh-wb400-gua
 > cd dsh-wb400-guard && node install.mjs
 > ```
 >
-> Restart. Done. Zero dependencies, 25 tests, fails open.
+> Restart. Done. Zero dependencies, 29 tests, fails open.
 > 👉 https://github.com/curo22/dsh-wb400-guard
 
 **Version B — lead with the technical hook**
@@ -156,9 +156,9 @@ I tried two more "orthodox" hooks. Both are wrong:
 
 **What the plugin does**
 
-Rewrites `@` to `(at)` inside system and developer messages. The meaning is unchanged (the sentence is describing "tokens starting with @ are paths"), the model reads the same instruction, and the gateway no longer sees the character.
+Rewrites those two fingerprints inside system, developer and assistant messages. The meaning is unchanged (the sentence is describing "tokens starting with @ are paths"), the model reads the same instruction, and the gateway no longer matches.
 
-Six boundaries: system/developer only, guarded hosts only, non-JSON passes through, idempotent, fail-open, stale `Content-Length` dropped.
+Six boundaries: system/developer/assistant only, guarded hosts only, non-JSON passes through, idempotent, fail-open, stale `Content-Length` dropped.
 
 **Verification**
 

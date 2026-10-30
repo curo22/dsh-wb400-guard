@@ -24,3 +24,7 @@ Thumbs.db
 promo-dy/out/
 promo-dy/*.png
 promo-dy/抖音图文-6张.zip
+
+# 临时探针脚本，不发布
+tmp-*.mjs
+probe-*.mjs

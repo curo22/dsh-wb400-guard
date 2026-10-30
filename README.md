@@ -3,7 +3,7 @@
 **中文** | [English](README.en.md)
 
 [![CI](https://github.com/curo22/dsh-wb400-guard/actions/workflows/test.yml/badge.svg)](https://github.com/curo22/dsh-wb400-guard/actions/workflows/test.yml)
-[![tests](https://img.shields.io/badge/tests-25%20passing-brightgreen)](test/shipped.test.mjs)
+[![tests](https://img.shields.io/badge/tests-29%20passing-brightgreen)](test/shipped.test.mjs)
 [![dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)](package.json)
 [![node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-green)](package.json)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -119,12 +119,32 @@ You are an AI agent powered by DeepSeek Harness.
 
 ## 插件做什么
 
-在宿主进程包一层 `globalThis.fetch`，只对发往 `copilot.tencent.com` 的请求，对 **system / developer 消息**做两件事：
+在宿主进程包一层 `globalThis.fetch`，只对发往 `copilot.tencent.com` 的请求，对 **system / developer / assistant 消息**做两件事：
 
 1. 把触发源一那段文本里的 @ 换成等义写法 `(at)`；
-2. 把开头的身份句 `You are an AI agent powered by DeepSeek Harness.` 换成 `You are an AI agent powered by DeepSeek-Harness.`（空格改连字符）。
+2. 把开头的身份句 `You are an AI agent powered by DeepSeek​ Harness.` 换成 `You are an AI agent powered by DeepSeek-Harness.`（空格改连字符）。
 
-两处都是语义等价改写，模型读到的指令含义没变，网关匹配不到那两个指纹。user、assistant、tool 消息一个字不动；别的 API（DeepSeek、OpenAI、Anthropic、WorkBuddy 国际版）一律原样透传。
+两处都是语义等价改写，模型读到的指令含义没变，网关匹配不到那两个指纹。user 和 tool 消息一个字不动；别的 API（DeepSeek、OpenAI、Anthropic、WorkBuddy 国际版）一律原样透传。
+
+### 为什么要连 assistant 一起扫
+
+网关不止看 system。实测（同一账号、同一请求头，只换 body）：
+
+| assistant 消息 | 结果 |
+|---|---|
+| 干净内容 | 200 |
+| 身份句在开头 | **400** 11128 |
+| 身份句在中段 / 尾部 | 200 |
+| 文件引用段在开头 / 中段 / 尾部 | **400** 11128 |
+| 文件引用段 @ 换成 `(at)` | **200** |
+| 文件引用段前加 1 空格 / tab / 换行 / BOM | **400** 全部 |
+| 普通 `@`、邮箱 `a@b.com`、`@someone` | 200 |
+| 多轮对话里只有第 2 条 assistant 带指纹 | **400**（每条都查） |
+
+结论：assistant 里文件引用段**任意位置**都触发（比 system 严），身份句仍然只在开头触发。user 和 tool 消息里放同样的内容都 200，所以刻意不动它们。
+
+`mode=all` 只在 system 上兜底全换，不影响 assistant 的普通 @。
+
 ## 为什么挂在 fetch 层
 
 试过另外两个位置，都不行：
@@ -198,13 +218,13 @@ New-Item -ItemType Junction -Path "$prof\node_modules\dsh-wb400-guard" -Target "
 |---|---|---|
 | `enabled` | `true` | 关掉就完全不碰 fetch |
 | `gatewayHosts` | `["copilot.tencent.com"]` | 要防护的 host；以 `.` 开头做后缀匹配。国际网关默认不在列表 |
-| `mode` | `"anchor"` | `anchor` 只改文件引用说明那几句；`all` 把 system 里所有 `@` 全换掉（内核改了措辞时兜底） |
+| `mode` | `"anchor"` | `anchor` 只改两处指纹那几句；`all` 把 system 里所有 `@` 全换掉（内核改了措辞时兜底） |
 | `logPath` | `""` | 空则写 `~/.dsh/logs/dsh-wb400-guard.jsonl` |
 | `dryRun` | `false` | 只记录不实际改写 |
 
 ## 安全边界
 
-- **只改 system / developer**。user 消息里的邮箱 `a@b.com`、`@某人` 一律不动。
+- **只改 system / developer / assistant**。user 与 tool 消息里的邮箱 `a@b.com`、`@某人`、代码里的装饰器一律不动。
 - **只改受防护的 host**。别家 API 请求原样透传同一引用，不重新序列化。
 - **非 JSON、非字符串、无 body 的请求**原样透传。
 - **幂等**。第二次改写不再变动，返回入参原引用。
@@ -215,7 +235,7 @@ New-Item -ItemType Junction -Path "$prof\node_modules\dsh-wb400-guard" -Target "
 ## 验证
 
 ```powershell
-# 产物自测 25 条：契约、改写（两个触发源）、host 判定、幂等、fail-open、安装卸载、配置
+# 产物自测 29 条：契约、改写（三个触发源场景）、host 判定、幂等、fail-open、安装卸载、配置
 node --test
 
 # 对真实国内网关验证（需要本机已登录 WorkBuddy 桌面版）
@@ -235,6 +255,7 @@ node verify-live.mjs
 ```powershell
 # 两个触发源各自单独发、叠加发，五组真实网关对照
 node scripts/verify-identity-live.mjs
+node scripts/verify-assistant-live.mjs
 
 # 端到端：原版 dsh-workbuddy-connect 组装 → guard 改写 → 真实网关
 node scripts/verify-pipeline.mjs
@@ -272,7 +293,7 @@ node scripts/compare-vendor.mjs . "$env:USERPROFILE\.dsh\profiles\desktop\vendor
 不会。只有 host 匹配 `copilot.tencent.com` 的请求才会被看。DeepSeek 官方 API、OpenAI、Anthropic、WorkBuddy 国际版都是原样透传同一个对象引用，连序列化都不会重做。
 
 **会不会改坏我的对话内容？**
-只动 system / developer 消息。user 里写的邮箱、`@某人`、代码里的装饰器、正则，一个都不碰。改的也只有那句文件引用说明，语义不变。
+只动 system / developer / assistant 消息。user 和 tool 里写的邮箱、`@某人`、代码里的装饰器、正则，一个都不碰，`@"` 这种 here-string 开头也原样保留。改的只有两处指纹，语义不变。
 
 **为什么不用改 `dsh-workbuddy-connect`？**
 改那个包在插件升级时会被覆盖，得重打。本插件在 profile 层，插件包升级不影响它。

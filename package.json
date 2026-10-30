@@ -1,6 +1,6 @@
 {
   "name": "dsh-wb400-guard",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Fixes the WorkBuddy China gateway 400 (code 11128) when using DeepSeek Harness with a domestic WorkBuddy reverse proxy. One command, zero runtime dependencies.",
   "keywords": [
     "dsh",
@@ -45,7 +45,8 @@
     "verify:real-body": "node scripts/verify-real-body.mjs",
     "verify:pipeline": "node scripts/verify-pipeline.mjs",
     "health": "node scripts/health-check.mjs",
-    "verify:identity": "node scripts/verify-identity-live.mjs"
+    "verify:identity": "node scripts/verify-identity-live.mjs",
+    "verify:assistant": "node scripts/verify-assistant-live.mjs"
   },
   "engines": {
     "node": "^22.19.0 || >=24.0.0"

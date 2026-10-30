@@ -3,7 +3,7 @@
 [中文](README.md) | **English**
 
 [![CI](https://github.com/curo22/dsh-wb400-guard/actions/workflows/test.yml/badge.svg)](https://github.com/curo22/dsh-wb400-guard/actions/workflows/test.yml)
-[![tests](https://img.shields.io/badge/tests-25%20passing-brightgreen)](test/shipped.test.mjs)
+[![tests](https://img.shields.io/badge/tests-29%20passing-brightgreen)](test/shipped.test.mjs)
 [![dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)](package.json)
 [![node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-green)](package.json)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -74,16 +74,31 @@ A sliding window narrowed the trigger to offsets 25,000–30,000; section-level 
 
 ## What the plugin does
 
-It wraps `globalThis.fetch` in the host process. For requests to `copilot.tencent.com` only, it rewrites `@` to the equivalent `(at)` **inside system and developer messages**. User, assistant and tool messages are untouched. Every other API (DeepSeek, OpenAI, Anthropic, WorkBuddy international) passes through the same object reference, without even being re-serialized.
+It wraps `globalThis.fetch` in the host process. For requests to `copilot.tencent.com` only, it rewrites two things **inside system, developer and assistant messages**:
 
-`(at)` is semantically identical here — the sentence describes "tokens starting with @ are paths":
+1. the `@` in the file-reference paragraph, to the equivalent `(at)`;
+2. a leading identity sentence (`You are an AI agent powered by DeepSeek​ Harness.`) to the hyphenated form `You are an AI agent powered by DeepSeek-Harness.`.
 
-```
-Tokens prefixed with (at) are paths the user explicitly referenced. ...
-(at)"..." quotes a path containing spaces.
-```
+Both are meaning-preserving edits: the model reads the same instruction, the gateway no longer matches either fingerprint. User and tool messages are untouched. Every other API (DeepSeek, OpenAI, Anthropic, WorkBuddy international) passes through the same object reference, without even being re-serialized.
 
-The model reads the same instruction. The gateway no longer sees the character.
+### Why assistant messages are scanned too
+
+The gateway does not stop at system. Measured with the same account and identical headers, varying only the body:
+
+| assistant message | Result |
+|---|---|
+| clean content | 200 |
+| identity sentence at the start | **400** 11128 |
+| identity sentence mid-body / at the end | 200 |
+| file-reference paragraph at the start / mid-body / at the end | **400** 11128 |
+| file-reference paragraph with `@` rewritten to `(at)` | **200** |
+| paragraph prefixed with 1 space / a tab / a newline / a BOM | **400**, every variant |
+| ordinary `@`, an email like `a@b.com`, an `@mention` | 200 |
+| only the second assistant turn carries the fingerprint | **400** (every message is checked) |
+
+So inside assistant messages the file-reference paragraph fires at *any* position (stricter than system), while the identity sentence still only fires at the start. The same content inside a user or tool message returns 200, which is why those are left alone.
+
+`mode=all` still only applies to system messages; it does not touch ordinary `@` characters in assistant text.
 
 ## Why the fetch layer
 
@@ -195,6 +210,7 @@ Closer-to-production scripts:
 ```powershell
 # Both triggers, alone and stacked — five live A/B cases
 node scripts/verify-identity-live.mjs
+node scripts/verify-assistant-live.mjs
 
 # End to end: stock dsh-workbuddy-connect assembles → guard rewrites → real gateway
 node scripts/verify-pipeline.mjs
@@ -232,7 +248,7 @@ Still broken after install? Check in this order.
 No. Only requests whose host matches `copilot.tencent.com` are inspected. DeepSeek's own API, OpenAI, Anthropic and WorkBuddy international get the same object reference back — not even re-serialized.
 
 **Will it corrupt my conversation content?**
-It touches system and developer messages only. Emails, `@mentions`, decorators and regexes in user code are untouched. Within those messages it changes only the file-reference paragraph, and the meaning is unchanged.
+It touches system, developer and assistant messages only. Emails, `@mentions`, decorators, regexes and PowerShell here-strings in user code are untouched. Within those messages it changes only the two fingerprints, and the meaning is unchanged.
 
 **Why not just patch `dsh-workbuddy-connect`?**
 Editing that package gets overwritten on every plugin upgrade and has to be re-applied. This plugin lives at the profile layer, so package upgrades don't touch it.

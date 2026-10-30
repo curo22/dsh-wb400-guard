@@ -62,7 +62,7 @@ test('幂等：第二次改写不再变动且返回原引用', () => {
   assert.equal(second.body, first.body);
 });
 
-test('只改 system / developer，user 里的 @ 不动', () => {
+test('user 消息里的 @ 不动，assistant 里的普通 @ 也不动', () => {
   const body = JSON.stringify({
     messages: [
       { role: 'system', content: KERNEL_PROMPT },
@@ -74,7 +74,7 @@ test('只改 system / developer，user 里的 @ 不动', () => {
   const parsed = JSON.parse(out.body);
   assert.equal(countAt(parsed.messages[0].content), 0);
   assert.equal(parsed.messages[1].content, 'mail me at a@b.com or ping @someone');
-  assert.equal(parsed.messages[2].content, 'ok @you');
+  assert.equal(parsed.messages[2].content, 'ok @you', 'assistant 里的普通 @ 不碰，只碰整段指纹');
 });
 
 test('developer 角色同样被处理（CN 路由会归一成 system）', () => {
@@ -357,4 +357,57 @@ test('mode=all 时身份句仍然只按语义改，不破坏正文', () => {
   const sys = parsed.messages[0].content;
   assert.equal(guard.hasIdentitySentence(sys), false);
   assert.equal(countAt(sys), 0, 'mode=all 会把正文里的 @ 也换掉，这是既定行为');
+});
+
+/* ------------------------------------------------------------------ assistant 角色 */
+
+test('assistant 消息里的整段指纹也要处理（实测网关会扫 assistant）', () => {
+  const raw = JSON.stringify({
+    messages: [
+      { role: 'system', content: 'You are a helpful assistant.' },
+      { role: 'user', content: 'hi' },
+      { role: 'assistant', content: 'Sure. ' + KERNEL_PROMPT + ' More.' },
+      { role: 'user', content: 'again' },
+    ],
+  });
+  const out = guard.rewriteJsonBody(raw);
+  assert.equal(out.changed, true, 'assistant 里的指纹必须被处理，否则整轮 400');
+  const asst = JSON.parse(out.body).messages[2].content;
+  assert.equal(countAt(asst), 0);
+  assert.ok(asst.startsWith('Sure. '), '前缀不能被动');
+  assert.ok(asst.endsWith(' More.'), '后缀不能被动');
+});
+
+test('assistant 开头的身份句同样要被中和', () => {
+  const raw = JSON.stringify({
+    messages: [
+      { role: 'system', content: 'You are a helpful assistant.' },
+      { role: 'user', content: 'hi' },
+      { role: 'assistant', content: IDENTITY + ' Sure.' },
+      { role: 'user', content: 'again' },
+    ],
+  });
+  const out = guard.rewriteJsonBody(raw);
+  assert.equal(out.changed, true);
+  assert.equal(guard.hasIdentitySentence(JSON.parse(out.body).messages[2].content), false);
+});
+
+test('tool 消息里的指纹不改（实测网关不扫 tool）', () => {
+  const raw = JSON.stringify({
+    messages: [
+      { role: 'system', content: 'You are a helpful assistant.' },
+      { role: 'user', content: 'hi' },
+      { role: 'assistant', content: null, tool_calls: [{ id: 'c1', type: 'function', function: { name: 'read', arguments: '{}' } }] },
+      { role: 'tool', tool_call_id: 'c1', content: KERNEL_PROMPT },
+    ],
+  });
+  assert.equal(guard.rewriteJsonBody(raw).changed, false);
+});
+
+test('裸 @" 不触发网关，所以绝不能改（会弄坏 PowerShell here-string）', () => {
+  const ps = '$c = @"\nGet-ChildItem\n"@';
+  const raw = JSON.stringify({ messages: [{ role: 'assistant', content: ps }] });
+  const out = guard.rewriteJsonBody(raw);
+  assert.equal(out.changed, false, 'here-string 必须原样透传');
+  assert.equal(out.body, raw);
 });

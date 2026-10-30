@@ -12,15 +12,15 @@
 
 - `dsh-wb400-guard` —— 让 DSH 的 WorkBuddy 国内版反代不再每轮 400
 - 一条命令，修掉 "请求被拦截，请重新发送"
-- 给 DeepSeek Harness 的 WorkBuddy 国内版补丁：零依赖，25 个测试
+- 给 DeepSeek Harness 的 WorkBuddy 国内版补丁：零依赖，29 个测试
 
 **副标题**
 
-> 国内网关对 system 消息里的 `@` 做通道校验，看到就回 `11128`。这个插件只改 system 里的那一个字符，其他一律不碰。
+> 国内网关对消息里的两处文字做通道校验，匹配上就回 `11128`。这个插件只改那两处，其他一律不碰。
 
 **一句话介绍（各平台 bio、issue 引用、推荐语都用得上）**
 
-> DSH 走 WorkBuddy 国内版反代时每轮都报 `400 请求被拦截`，根因是 system prompt 里有两处会被网关认出来的指纹。这个插件在 fetch 层把这两处指纹都改掉，零依赖、fail-open、25 个测试。
+> DSH 走 WorkBuddy 国内版反代时每轮都报 `400 请求被拦截`，根因是 system prompt 里有两处会被网关认出来的指纹。这个插件在 fetch 层把这两处指纹都改掉，零依赖、fail-open、29 个测试。
 
 ---
 
@@ -41,7 +41,7 @@
 > cd dsh-wb400-guard && node install.mjs
 > ```
 >
-> 重启，结束。零依赖，25 个测试，改坏了自动退回原请求。
+> 重启，结束。零依赖，29 个测试，改坏了自动退回原请求。
 > 👉 https://github.com/curo22/dsh-wb400-guard
 
 **版本 B（技术钩子开场）**
@@ -162,9 +162,9 @@ Tokens prefixed with @ are paths the user explicitly referenced. ...
 
 **插件做的事**
 
-在 system / developer 消息里把 `@` 换成 `(at)`。语义不变（这句话本来就是描述"以 @ 开头的 token 是路径"），模型读到的指令一样，网关看到的不再有那个字符。
+在 system / developer / assistant 消息里把那两处指纹换掉。语义不变（那句话本来就是描述"以 @ 开头的 token 是路径"），模型读到的指令一样，网关匹配不上。
 
-六条安全边界：只改 system/developer、只改受防护 host、非 JSON 原样透传、幂等、fail-open、剔除陈旧的 `Content-Length`。
+六条安全边界：只改 system/developer/assistant、只改受防护 host、非 JSON 原样透传、幂等、fail-open、剔除陈旧的 `Content-Length`。
 
 **验证**
 
