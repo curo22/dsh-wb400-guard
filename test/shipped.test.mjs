@@ -618,3 +618,37 @@ test('中性化不破坏正文里的普通 DeepSeek/Harness 词', () => {
   const out = guard.neutralizeFingerprints(text);
   assert.equal(out, text, '两个词分开出现、中间没有零宽空格，不该被当成品牌指纹');
 });
+
+test('resolveLogPath 不会把日志写进 USERPROFILE 解出来的乱码目录', () => {
+  // 复现 Electron host 里的场景：USERPROFILE 被按 GBK 误解成乱码。
+  // 真实的 ~/.dsh 存在，所以候选链必须选中它，而不是选 USERPROFILE。
+  const saved = process.env.USERPROFILE;
+  delete process.env.DSH_HOME;
+  process.env.USERPROFILE = 'C:\\Users\\缃楅洦';
+  try {
+    const p = guard.resolveLogPath('');
+    assert.equal(
+      /缃楅洦/.test(p),
+      false,
+      '日志路径不能落到 USERPROFILE 解出来的乱码目录',
+    );
+    assert.ok(p.endsWith('dsh-wb400-guard.jsonl'));
+  } finally {
+    process.env.USERPROFILE = saved;
+  }
+});
+
+test('resolveLogPath 显式配置优先，DSH_HOME 覆盖家目录', () => {
+  const explicit = 'D:\\tmp\\my-guard.jsonl';
+  assert.equal(guard.resolveLogPath(explicit), 'D:\\tmp\\my-guard.jsonl');
+
+  const savedHome = process.env.DSH_HOME;
+  process.env.DSH_HOME = 'D:\\dsh-home';
+  try {
+    assert.equal(guard.resolveLogPath(''), 'D:\\dsh-home\\logs\\dsh-wb400-guard.jsonl');
+  } finally {
+    if (savedHome === undefined) delete process.env.DSH_HOME;
+    else process.env.DSH_HOME = savedHome;
+  }
+});
+

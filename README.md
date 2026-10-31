@@ -3,7 +3,7 @@
 **中文** | [English](README.en.md)
 
 [![CI](https://github.com/curo22/dsh-wb400-guard/actions/workflows/test.yml/badge.svg)](https://github.com/curo22/dsh-wb400-guard/actions/workflows/test.yml)
-[![tests](https://img.shields.io/badge/tests-45%20passing-brightgreen)](test/shipped.test.mjs)
+[![tests](https://img.shields.io/badge/tests-47%20passing-brightgreen)](test/shipped.test.mjs)
 [![dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)](package.json)
 [![node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-green)](package.json)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -209,7 +209,7 @@ cd dsh-wb400-guard
 node install.mjs
 ```
 
-它做四件事：拷文件到 `%USERPROFILE%\.dsh\profiles\desktop\vendor\dsh-wb400-guard`、往 profile 的 `package.json` 写 `dependencies` 与 `dsh.profile.bundles`、建 junction 让模块可解析、跑一遍产物的 45 条自测。
+它做四件事：拷文件到 `%USERPROFILE%\.dsh\profiles\desktop\vendor\dsh-wb400-guard`、往 profile 的 `package.json` 写 `dependencies` 与 `dsh.profile.bundles`、建 junction 让模块可解析、跑一遍产物的 47 条自测。
 
 指定别的 profile：
 
@@ -270,7 +270,7 @@ New-Item -ItemType Junction -Path "$prof\node_modules\dsh-wb400-guard" -Target "
 ## 验证
 
 ```powershell
-# 产物自测 45 条：契约、四处指纹改写、assistant 扫描、host 判定、幂等、fail-open、安装卸载、配置
+# 产物自测 47 条：契约、四处指纹改写、assistant 扫描、host 判定、幂等、fail-open、安装卸载、配置
 node --test
 
 # 对真实国内网关验证（需要本机已登录 WorkBuddy 桌面版）
@@ -346,11 +346,12 @@ node scripts/compare-vendor.mjs . "$env:USERPROFILE\.dsh\profiles\desktop\vendor
 
 - **网关改了规则**（不再因 `@` 拦截）时插件空转，不影响功能。`verify-live.mjs` 会告诉你原样请求已经能过。
 - **DSH 内核改了 `FILE_REFERENCE_PROMPT` 措辞**时，`anchor` 模式仍有 `Tokens prefixed with @` 这个锚点兜底；锚点也变了就把 `mode` 设成 `all`。
-- **触发源三、四没有在本机独立复现成功**（本机这两段被 dsh-purge 清空过）。纳入改写表是依据他人机器的实测加防御性覆盖。如果你的机器四段全在、改了还是 400，把 mode 设成 ll，开 dryRun 抓一份原始 body 提 issue——那说明网关又加了新指纹。
+- **触发源三、四没有在本机独立复现成功**（本机这两段被 dsh-purge 清空过）。纳入改写表是依据他人机器的实测加防御性覆盖。如果你的机器四段全在、改了还是 400，把 mode 设成 all，开 dryRun 抓一份原始 body 提 issue——那说明网关又加了新指纹。
 - **429 限流与本插件无关**。那是额度用尽，等额度重置。
 - **`stream: false` 会被国内网关拒为 `11101`**，这个码跟 `11128` 不是一回事。本插件只解决 `11128`。
 - **两个插件同时包装 `fetch` 时**后装的在外层。本插件用 `Symbol.for('dsh-wb400-guard.installed')` 保证只装一层，重复调用返回同一个卸载函数，卸载时也不会覆盖别人后来装的 `fetch`。
 - **磁盘文件与运行中进程是两回事**。把磁盘文件改回原版，不会让进程里的改动消失，它要等下次启动才失效。装了插件不重启，同理。
+- **日志路径在中文用户名机器上曾经会写到乱码目录**。`0.1.6` 及更早版本直接取 `process.env.USERPROFILE`，部分 Electron host 会把这个值按 GBK 解出来，日志就落进 `C:\Users\缃楅洦\.dsh\logs\` 这种并不存在的位置（实际写入仍会失败或落到别处）。`0.1.7` 改成优先从插件自身路径向上找 `.dsh`，其次用 `os.userInfo().homedir`（Windows 上走 `GetUserProfileDirectoryW`，不读环境变量），两条都不行才退回 `homedir()` 与 `USERPROFILE`。
 
 ## 开发
 

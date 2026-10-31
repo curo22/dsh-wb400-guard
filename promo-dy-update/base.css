@@ -1,0 +1,112 @@
+* { margin:0; padding:0; box-sizing:border-box; }
+html,body {
+  width:1080px; height:1440px; overflow:hidden;
+  background:#fbfbfd;
+  font-family:"Microsoft YaHei","PingFang SC",sans-serif;
+  color:#101014;
+  -webkit-font-smoothing:antialiased;
+}
+body{
+  display:flex; flex-direction:column;
+  padding:104px 84px 116px; position:relative;
+}
+/* 顶部一道渐变色条 */
+body::before{
+  content:""; position:absolute; left:0; right:0; top:0; height:10px;
+  background:linear-gradient(90deg,#ff3b30,#ff9500 42%,#0071e3 100%);
+}
+/* 右下角柔和光斑 */
+body::after{
+  content:""; position:absolute; width:760px; height:760px; right:-240px; bottom:-300px;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(0,113,227,.10),rgba(0,113,227,0) 68%);
+  pointer-events:none;
+}
+body > *{ position:relative; z-index:1; }
+
+.head{ display:flex; align-items:center; justify-content:space-between; flex:0 0 auto; }
+.tag{
+  font-size:24px; letter-spacing:.12em; color:#6b6b73;
+  background:#fff; border:2px solid #e6e6eb; border-radius:999px; padding:11px 26px;
+}
+.tag.hot{ color:#ff3b30; border-color:#ffd9d6; background:#fff6f5; }
+.page{ font-size:24px; color:#c3c3cb; letter-spacing:.06em; font-weight:800; }
+.body{ flex:1; display:flex; flex-direction:column; justify-content:center; padding:30px 0; }
+.foot{ flex:0 0 auto; font-size:27px; color:#8e8e96; line-height:1.5; }
+.foot b{ color:#4a4a52; font-weight:800; }
+
+h1{ font-size:100px; line-height:1.22; font-weight:800; letter-spacing:-.025em; }
+h1 em{ font-style:normal; }
+h2{ font-size:64px; line-height:1.3; font-weight:800; letter-spacing:-.02em; }
+h2 em{ font-style:normal; }
+.red{ color:#ff3b30; }
+.blue{ color:#0071e3; }
+.green{ color:#0aa04a; }
+.gray{ color:#8e8e96; }
+.hl{ background:linear-gradient(180deg,transparent 62%,#ffe9a8 62%,#ffe9a8 94%,transparent 94%); }
+
+.sub{ font-size:37px; line-height:1.62; color:#4a4a52; margin-top:40px; }
+.sub b{ color:#101014; }
+
+.pill{
+  display:inline-flex; align-items:center; gap:16px;
+  font-size:32px; font-weight:800; margin-top:44px;
+}
+.dot{ width:14px; height:14px; border-radius:50%; display:inline-block; flex:0 0 auto; }
+
+.mono{ font-family:"Cascadia Mono","Consolas",monospace; letter-spacing:-.01em; }
+
+/* 版本徽章 */
+.ver{
+  display:inline-block; font-family:"Cascadia Mono","Consolas",monospace;
+  font-size:36px; font-weight:700; color:#fff; background:#101014;
+  border-radius:16px; padding:10px 26px; letter-spacing:-.01em;
+}
+.ver.blue{ background:#0071e3; }
+.ver.green{ background:#0aa04a; }
+
+/* 白卡片列表 */
+.card{
+  background:#fff; border:2px solid #e6e6eb; border-radius:26px;
+  padding:40px 42px; box-shadow:0 10px 34px rgba(16,16,20,.05);
+}
+.list{ margin-top:40px; display:flex; flex-direction:column; gap:22px; }
+.item{
+  display:flex; gap:24px; align-items:center;
+  background:#fff; border:2px solid #e6e6eb; border-radius:22px;
+  padding:30px 34px; box-shadow:0 8px 26px rgba(16,16,20,.04);
+}
+.item .n{
+  flex:0 0 auto; width:56px; height:56px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:28px; font-weight:800; color:#fff; background:#101014;
+}
+.item .n.ok{ background:#0aa04a; }
+.item .n.no{ background:#ff3b30; }
+.item .tx{ flex:1; font-size:33px; line-height:1.45; color:#2a2a30; }
+.item .tx b{ color:#101014; font-weight:800; }
+.item .tx code, .tx code{
+  font-family:"Cascadia Mono","Consolas",monospace; font-size:28px;
+  background:#f2f2f6; border-radius:8px; padding:3px 11px; color:#0071e3;
+}
+
+/* 对比表 */
+.cmp{ margin-top:38px; border:2px solid #e6e6eb; border-radius:24px; overflow:hidden; background:#fff; box-shadow:0 10px 34px rgba(16,16,20,.05); }
+.cmp .row{ display:flex; border-bottom:2px solid #efeff3; }
+.cmp .row:last-child{ border-bottom:none; }
+.cmp .c{ padding:26px 30px; font-size:29px; line-height:1.42; }
+.cmp .c:first-child{ flex:0 0 290px; color:#6b6b73; background:#f7f7fa; }
+.cmp .c:last-child{ flex:1; color:#2a2a30; }
+.cmp .c code{ font-family:"Cascadia Mono","Consolas",monospace; font-size:26px; color:#0071e3; }
+
+/* 代码/路径块 */
+.code{
+  margin-top:36px; background:#fff; border:2px solid #e6e6eb; border-radius:22px;
+  padding:34px 38px; font-family:"Cascadia Mono","Consolas",monospace;
+  font-size:30px; line-height:1.6; color:#101014; white-space:pre;
+  box-shadow:0 10px 34px rgba(16,16,20,.05);
+}
+.code .c{ color:#ff3b30; }
+
+/* 大数字 */
+.num{ font-size:180px; font-weight:800; letter-spacing:-.045em; line-height:1; }

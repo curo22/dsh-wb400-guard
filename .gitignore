@@ -23,7 +23,10 @@ Thumbs.db
 # 本地推广素材（抖音图文渲染产物与中间文件）
 promo-dy/out/
 promo-dy/*.png
-promo-dy/抖音图文-6张.zip
+promo-dy/*.zip
+promo-dy-update/out/
+promo-dy-update/*.png
+promo-dy-update/*.zip
 
 # 临时探针脚本，不发布
 tmp-*.mjs

@@ -3,7 +3,7 @@
 [中文](README.md) | **English**
 
 [![CI](https://github.com/curo22/dsh-wb400-guard/actions/workflows/test.yml/badge.svg)](https://github.com/curo22/dsh-wb400-guard/actions/workflows/test.yml)
-[![tests](https://img.shields.io/badge/tests-45%20passing-brightgreen)](test/shipped.test.mjs)
+[![tests](https://img.shields.io/badge/tests-47%20passing-brightgreen)](test/shipped.test.mjs)
 [![dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)](package.json)
 [![node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-green)](package.json)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -150,7 +150,7 @@ cd dsh-wb400-guard
 node install.mjs
 ```
 
-It copies files into `%USERPROFILE%\.dsh\profiles\desktop\vendor\dsh-wb400-guard`, writes `dependencies` and `dsh.profile.bundles` into the profile's `package.json`, creates a junction so the module resolves, and runs the 45 shipped tests.
+It copies files into `%USERPROFILE%\.dsh\profiles\desktop\vendor\dsh-wb400-guard`, writes `dependencies` and `dsh.profile.bundles` into the profile's `package.json`, creates a junction so the module resolves, and runs the 47 shipped tests.
 
 A different profile:
 
@@ -211,7 +211,7 @@ Tunable in `cordis.patch.yml`:
 ## Verify
 
 ```powershell
-# 45 shipped tests: contract, four-fingerprint rewriting, assistant scanning, host matching, idempotence, fail-open, install/uninstall, config
+# 47 shipped tests: contract, four-fingerprint rewriting, assistant scanning, host matching, idempotence, fail-open, install/uninstall, config
 node --test
 
 # Against the real China gateway (needs WorkBuddy desktop signed in on this machine)
@@ -291,6 +291,7 @@ It changes how one character is spelled in your own outgoing message. Same endpo
 - **`stream: false` is rejected by the China gateway as `11101`**, a different code from `11128`. This plugin only fixes `11128`.
 - **Two plugins wrapping `fetch`** — the later one sits outermost. This plugin uses `Symbol.for('dsh-wb400-guard.installed')` so only one layer installs, repeated calls return the same uninstaller, and uninstalling won't clobber a `fetch` someone else installed afterwards.
 - **The file on disk and the running process are different things.** Reverting the file does not undo the change inside a running process; it takes effect next launch. Same for installing the plugin without restarting.
+- **On machines with a non-ASCII user name the log path used to land in a mojibake directory.** `0.1.6` and earlier read `process.env.USERPROFILE` directly; some Electron hosts decode that value as GBK, so the log path became something like `C:\Users\...\.dsh\logs\` under a name that does not exist. `0.1.7` resolves `.dsh` by walking up from the plugin's own location first, then falls back to `os.userInfo().homedir` (which uses `GetUserProfileDirectoryW` on Windows and does not read the environment), and only then to `homedir()` and `USERPROFILE`.
 
 ## Development
 

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="base.css">
+</head>
+<body>
+  <div class="head">
+    <div class="tag hot">0.1.7 · 意外收获</div>
+    <div class="page">5 / 8</div>
+  </div>
+
+  <div class="body">
+    <div><span class="ver green">v0.1.7</span></div>
+    <h2 style="margin-top:40px">查日志的时候<br>发现路径是<em class="red">一堆乱码</em></h2>
+    <div class="sub">本来该是「罗雨」，存下来变成这样。</div>
+
+    <div class="code">C:\Users\<span class="c">缃楅洦</span>\.dsh\logs\</div>
+
+    <div class="sub">原因很朴素：程序去问系统「我的用户目录在哪」，<br>拿到的一串字<b>被按老编码解错了</b>。</div>
+  </div>
+
+  <div class="foot">这个坑只在<b>中文、日文、韩文用户名</b>的电脑上出现 —— 也就是大多数人</div>
+</body>
+</html>
