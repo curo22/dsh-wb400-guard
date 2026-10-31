@@ -3,7 +3,7 @@
 [中文](README.md) | **English**
 
 [![CI](https://github.com/curo22/dsh-wb400-guard/actions/workflows/test.yml/badge.svg)](https://github.com/curo22/dsh-wb400-guard/actions/workflows/test.yml)
-[![tests](https://img.shields.io/badge/tests-29%20passing-brightgreen)](test/shipped.test.mjs)
+[![tests](https://img.shields.io/badge/tests-40%20passing-brightgreen)](test/shipped.test.mjs)
 [![dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)](package.json)
 [![node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-green)](package.json)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -50,7 +50,22 @@ The China gateway `copilot.tencent.com` runs a channel check over system message
 
 The WorkBuddy plugin wraps that into the 请求被拦截 message above.
 
+**Four unrelated sources trip this rule.** A stock DSH sends all of them, so the plugin handles all of them. The first two were pinned down on this machine with live A/B against the real gateway; the other two come from a real failure reported in [a1141171521/dsh-multi-agent-gateway#1](https://github.com/a1141171521/dsh-multi-agent-gateway/issues/1), where all four were present at once — fixing only the first two still fails.
+
+| # | Source | Text |
+|---|---|---|
+| 1 | `@deepseek-ai/dsh-file-reference` | `Tokens prefixed with @ are paths the user explicitly referenced. Relative paths resolve from the workspace root; ...` |
+| 2 | `@deepseek-ai/dsh-system-prompt` (`includeHarnessIdentity`) | `You are an AI agent powered by DeepSeek` U+200B `Harness.` |
+| 3 | `@deepseek-ai/dsh-web-app` (`personaPrefix`) | `You are a coding agent powered by the workbuddy/hy4-preview model.` |
+| 4 | `@deepseek-ai/dsh-harness-dev-context` | `You are interacting with the user through the DeepSeek` U+200B `Harness Web GUI ...` and `Current DeepSeek` U+200B `Harness Web GUI URL: "..."` |
+
+Source 3 interpolates the model name, so the China build (`workbuddy/hy4-preview`) and the international build (`workbuddy-intl/deepseek-v4.1-flash`) differ in one line only — that one line is enough. The gateway matches the `coding agent powered by` shape, not a brand word, so renaming the model does not help.
+
+Sources 4 sit near the **end** of the system message (offset ~6,552), not at the front, so any fix that only anchors on the opening bytes misses them entirely.
+
 The international gateway does no such check, which is why the same request to `www.workbuddy.ai` returns 200.
+
+> **Strength of evidence**: sources 1 and 2 are live A/B results from this machine. Sources 3 and 4 return 200 when sent alone from this machine (this install's prompt has those sections cleared by `dsh-purge`), so their inclusion is based on the other machine's evidence plus **defensive coverage**. Neutralizing all four cannot break a working request — every edit is meaning-preserving, and the combined four-fingerprint fixture goes 400 before / 200 after on this machine too.
 
 ## How it was pinned down (reproducible)
 
@@ -74,12 +89,18 @@ A sliding window narrowed the trigger to offsets 25,000–30,000; section-level 
 
 ## What the plugin does
 
-It wraps `globalThis.fetch` in the host process. For requests to `copilot.tencent.com` only, it rewrites two things **inside system, developer and assistant messages**:
+It wraps `globalThis.fetch` in the host process. For requests to `copilot.tencent.com` only, it rewrites **four fingerprints inside system, developer and assistant messages**:
 
-1. the `@` in the file-reference paragraph, to the equivalent `(at)`;
-2. a leading identity sentence (`You are an AI agent powered by DeepSeek​ Harness.`) to the hyphenated form `You are an AI agent powered by DeepSeek-Harness.`.
+| # | From | To |
+|---|---|---|
+| 1 | the `@` in the file-reference paragraph | the equivalent `(at)` |
+| 2 | `You are an AI agent powered by DeepSeek` U+200B `Harness.` | `You are an AI agent powered by DeepSeek-Harness.` |
+| 3 | `You are a coding agent powered by ...` | `You are a coding agent running on ...` (model name kept as-is) |
+| 4 | `... the DeepSeek` U+200B `Harness Web GUI ...` / `Current DeepSeek` U+200B `Harness Web GUI URL` | `... this Web GUI ...` / `Current Web GUI URL` |
 
-Both are meaning-preserving edits: the model reads the same instruction, the gateway no longer matches either fingerprint. User and tool messages are untouched. Every other API (DeepSeek, OpenAI, Anthropic, WorkBuddy international) passes through the same object reference, without even being re-serialized.
+A final sweep turns any leftover `DeepSeek` + invisible separator + `Harness` brand fingerprint — including sections frozen in older sessions — into the hyphenated form.
+
+All edits are meaning-preserving: the model reads the same instruction, the gateway no longer matches any fingerprint. User and tool messages are untouched. Every other API (DeepSeek, OpenAI, Anthropic, WorkBuddy international) passes through the same object reference, without even being re-serialized.
 
 ### Why assistant messages are scanned too
 
@@ -129,7 +150,7 @@ cd dsh-wb400-guard
 node install.mjs
 ```
 
-It copies files into `%USERPROFILE%\.dsh\profiles\desktop\vendor\dsh-wb400-guard`, writes `dependencies` and `dsh.profile.bundles` into the profile's `package.json`, creates a junction so the module resolves, and runs the 29 shipped tests.
+It copies files into `%USERPROFILE%\.dsh\profiles\desktop\vendor\dsh-wb400-guard`, writes `dependencies` and `dsh.profile.bundles` into the profile's `package.json`, creates a junction so the module resolves, and runs the 40 shipped tests.
 
 A different profile:
 
@@ -190,7 +211,7 @@ Tunable in `cordis.patch.yml`:
 ## Verify
 
 ```powershell
-# 29 shipped tests: contract, rewriting (all three trigger scenes), host matching, idempotence, fail-open, install/uninstall, config
+# 40 shipped tests: contract, four-fingerprint rewriting, assistant scanning, host matching, idempotence, fail-open, install/uninstall, config
 node --test
 
 # Against the real China gateway (needs WorkBuddy desktop signed in on this machine)
@@ -208,7 +229,7 @@ node verify-live.mjs
 Closer-to-production scripts:
 
 ```powershell
-# Both triggers, alone and stacked — five live A/B cases
+# Trigger 1 and 2, alone and stacked — five live A/B cases
 node scripts/verify-identity-live.mjs
 node scripts/verify-assistant-live.mjs
 

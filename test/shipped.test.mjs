@@ -411,3 +411,131 @@ test('裸 @" 不触发网关，所以绝不能改（会弄坏 PowerShell here-st
   assert.equal(out.changed, false, 'here-string 必须原样透传');
   assert.equal(out.body, raw);
 });
+
+/* ============================================ 四处身份指纹（v0.1.5 起）
+ *
+ * 来自 a1141171521/dsh-multi-agent-gateway#1 的真实失败：对方机器上 DSH 的
+ * system prompt 里同时有四段带身份的句子，网关命中任意一句就回 400 / 11128。
+ * v0.1.4 只处理 #1 和 #4，所以那台机器必挂。
+ *
+ * 四段的出处（全部是官方内核默认就会发出的文本，不是用户写的）：
+ *   #1 @deepseek-ai/dsh-system-prompt        lib/index.js:231  （includeHarnessIdentity 默认 true）
+ *   #2 @deepseek-ai/dsh-web-app              cordis.patch.yml:19-20（personaPrefix）
+ *   #3 @deepseek-ai/dsh-harness-dev-context  lib/index.js:29    （WEB_SURFACE_PROMPT）
+ *   #4 @deepseek-ai/dsh-file-reference       lib/index.js:54    （FILE_REFERENCE_PROMPT）
+ */
+
+const ZW = String.fromCharCode(0x200b);
+
+/** #1 的原文。DeepSeek 与 Harness 之间是 U+200B，不是普通空格。 */
+const FP_IDENTITY = 'You are an AI agent powered by DeepSeek' + ZW + ' Harness.';
+
+/** #2 的原文。模型名由内核插值，这里覆盖国内常见的两个。 */
+const FP_PERSONA_CN = 'You are a coding agent powered by the workbuddy/hy4-preview model.';
+const FP_PERSONA_INTL = 'You are a coding agent powered by the workbuddy-intl/deepseek-v4.1-flash model.';
+
+/** #3 的原文（长句，只取开头可判定的部分做断言）。 */
+const FP_WEB_SURFACE =
+  'You are interacting with the user through the DeepSeek' +
+  ZW +
+  ' Harness Web GUI whose URL the runtime context names.';
+
+/** #3 的同插件运行时上下文。 */
+const FP_WEB_URL = 'Current DeepSeek' + ZW + ' Harness Web GUI URL: "http://127.0.0.1:43120".';
+
+test('#2 personaPrefix 被改写，且模型名原样保留', () => {
+  const out = guard.neutralizeFingerprints(FP_PERSONA_CN);
+  assert.notEqual(out, FP_PERSONA_CN, '这一句必须被改，否则对方机器上必挂');
+  assert.equal(/coding agent powered by/i.test(out), false, '网关认的是这个句式');
+  assert.ok(out.includes('workbuddy/hy4-preview'), '模型名本身网关不拦，不该动');
+  assert.ok(out.includes('coding agent'), '保持可读，不当垃圾删');
+});
+
+test('#2 国际版模型名同样被改写', () => {
+  const out = guard.neutralizeFingerprints(FP_PERSONA_INTL);
+  assert.equal(/coding agent powered by/i.test(out), false);
+  assert.ok(out.includes('workbuddy-intl/deepseek-v4.1-flash'));
+});
+
+test('#3 WEB_SURFACE_PROMPT 被改写', () => {
+  const out = guard.neutralizeFingerprints(FP_WEB_SURFACE);
+  assert.notEqual(out, FP_WEB_SURFACE);
+  assert.equal(/Harness Web GUI/.test(out), false, '品牌 + Web GUI 的组合是 #3 的指纹');
+  assert.ok(out.includes('Web GUI'), '功能语义要保留');
+});
+
+test('#3 运行时 URL 上下文被改写', () => {
+  const out = guard.neutralizeFingerprints(FP_WEB_URL);
+  assert.notEqual(out, FP_WEB_URL);
+  assert.equal(/Harness Web GUI/.test(out), false);
+  assert.ok(out.includes('127.0.0.1:43120'), 'URL 本体要保留');
+});
+
+test('四处身份指纹拼在一起时全部被清，且不留 U+200B', () => {
+  const all = [FP_IDENTITY, FP_PERSONA_CN, FP_WEB_SURFACE, FP_WEB_URL].join('\n\n');
+  const out = guard.neutralizeFingerprints(all);
+  assert.equal(out.includes(ZW), false, '零宽空格必须一个不剩');
+  assert.equal(/coding agent powered by/i.test(out), false);
+  assert.equal(/Harness Web GUI/.test(out), false);
+});
+
+test('身份改写与 @ 改写是两条独立路径，走 rewriteJsonBody 时两者都生效', () => {
+  const raw = JSON.stringify({
+    messages: [
+      { role: 'system', content: [FP_IDENTITY, FP_PERSONA_CN, FP_WEB_SURFACE, FP_WEB_URL, KERNEL_PROMPT].join('\n\n') },
+      { role: 'user', content: 'hi' },
+    ],
+  });
+  const out = guard.rewriteJsonBody(raw);
+  assert.equal(out.changed, true);
+  const sys = JSON.parse(out.body).messages[0].content;
+  assert.equal(sys.includes(ZW), false, '零宽空格一个不剩');
+  assert.equal(/coding agent powered by/i.test(sys), false);
+  assert.equal(/Harness Web GUI/.test(sys), false);
+  assert.equal(countAt(sys), 0, '@ 也一并处理');
+});
+
+test('对方机器那种 system prompt：只清 #2 #3 也必须能改（不能只认 #1 #4）', () => {
+  const raw = JSON.stringify({
+    model: 'deepseek-v4.1-flash',
+    stream: true,
+    messages: [
+      { role: 'system', content: FP_PERSONA_CN + '\n\n' + FP_WEB_SURFACE + '\n\n随便一段正文。' },
+      { role: 'user', content: 'hi' },
+    ],
+  });
+  assert.equal(raw.includes('@'), false, '这个 body 里一个 @ 都没有 —— 早退条件不能只看 @');
+  const out = guard.rewriteJsonBody(raw);
+  assert.equal(out.changed, true, 'v0.1.4 在这里会 return 未改动，正是对方必挂的原因');
+  const sys = JSON.parse(out.body).messages[0].content;
+  assert.equal(/coding agent powered by/i.test(sys), false);
+  assert.equal(/Harness Web GUI/.test(sys), false);
+  assert.ok(sys.includes('随便一段正文。'), '正文不能被牵连');
+});
+
+test('hasFingerprintText 能识别四处，且不误判普通文本', () => {
+  assert.equal(guard.hasFingerprintText(FP_IDENTITY), true);
+  assert.equal(guard.hasFingerprintText(FP_PERSONA_CN), true);
+  assert.equal(guard.hasFingerprintText(FP_WEB_SURFACE), true);
+  assert.equal(guard.hasFingerprintText(FP_WEB_URL), true);
+  assert.equal(guard.hasFingerprintText(KERNEL_PROMPT), false, '@ 由另一条路径处理');
+  assert.equal(guard.hasFingerprintText('You are a helpful assistant.'), false);
+  assert.equal(guard.hasFingerprintText(''), false);
+  assert.equal(guard.hasFingerprintText(null), false);
+});
+
+test('neutralizeFingerprints 对无关文本返回原引用', () => {
+  const plain = 'Just some ordinary prompt text without any fingerprint.';
+  assert.equal(guard.neutralizeFingerprints(plain), plain);
+});
+
+test('neutralizeFingerprints 幂等', () => {
+  const once = guard.neutralizeFingerprints(FP_IDENTITY + '\n' + FP_PERSONA_CN + '\n' + FP_WEB_SURFACE);
+  assert.equal(guard.neutralizeFingerprints(once), once);
+});
+
+test('中性化不破坏正文里的普通 DeepSeek/Harness 词', () => {
+  const text = '用户问的是 DeepSeek 这个模型本身，以及 Harness 这个词的含义。';
+  const out = guard.neutralizeFingerprints(text);
+  assert.equal(out, text, '两个词分开出现、中间没有零宽空格，不该被当成品牌指纹');
+});

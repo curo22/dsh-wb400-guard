@@ -3,7 +3,7 @@
 **中文** | [English](README.en.md)
 
 [![CI](https://github.com/curo22/dsh-wb400-guard/actions/workflows/test.yml/badge.svg)](https://github.com/curo22/dsh-wb400-guard/actions/workflows/test.yml)
-[![tests](https://img.shields.io/badge/tests-29%20passing-brightgreen)](test/shipped.test.mjs)
+[![tests](https://img.shields.io/badge/tests-40%20passing-brightgreen)](test/shipped.test.mjs)
 [![dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)](package.json)
 [![node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-green)](package.json)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -41,7 +41,9 @@
 {"code":11128,"msg":"Illegal API invocation from an unapproved channel"}
 ```
 
-插件包把这条错误包装成「请求被拦截，请重新发送」。**触发这条规则的有两个互不相关的来源**，DSH 默认两个都带着，所以插件两个都要处理。
+插件包把这条错误包装成「请求被拦截，请重新发送」。**触发这条规则的来源有四个，互不相关**，DSH 默认全都带着，所以插件全都要处理。
+
+前两个是本机实测定位出来的；后两个来自 [a1141171521/dsh-multi-agent-gateway#1](https://github.com/a1141171521/dsh-multi-agent-gateway/issues/1) 的真实失败——那台机器上四段同时在，只修前两段必挂。
 
 ### 触发源一：文件引用说明里的那一段字
 
@@ -71,7 +73,34 @@ You are an AI agent powered by DeepSeek Harness.
 
 本机这个坑被 `~/.dsh/prompt-inject.md` 顶掉了，所以有些人只撞到触发源一；没写过注入文件的用户两个都会撞。这也是为什么另一个插件只修了身份句、用户升级后照样报错——两个源必须一起修。
 
+### 触发源三：personaPrefix 里的 coding agent 句
+
+`@deepseek-ai/dsh-web-app` 的 `cordis.patch.yml` 用 `personaPrefix` 往 system 里插一句：
+
+```
+You are a coding agent powered by the workbuddy/hy4-preview model.
+```
+
+模型名由内核插值，国内版是 `workbuddy/hy4-preview`，国际版是 `workbuddy-intl/deepseek-v4.1-flash`。
+这句里没有任何品牌词，网关认的是 `coding agent powered by` 这个**句式**，所以换模型名救不了。
+
+### 触发源四：Web GUI 段
+
+`@deepseek-ai/dsh-harness-dev-context` 注册了两段，默认都在：
+
+```
+You are interacting with the user through the DeepSeek​ Harness Web GUI whose URL the runtime context names. ...
+```
+
+```
+Current DeepSeek​ Harness Web GUI URL: "http://127.0.0.1:43120".
+```
+
+这两段在 system 的**尾部**（偏移 6552 左右），不在开头——所以只做「开头锚定」的修法完全够不到它们。
+
 国际网关 `www.workbuddy.ai` 不做这个校验，同一份请求发过去是 200。
+
+> **取证强度说明**：触发源一和二是本机真机 A/B 打出来的；触发源三和四在**本机**单独发送是 200（我这台机器的 system prompt 里这两段被 `dsh-purge` 清空过，所以复现不出对方的失败），把它们纳入改写表是基于对方 issue 的实测（同 system prompt 国内 400 / 国际 200，逐行 diff 只差模型名）加**防御性覆盖**。四段一起中性化不会让任何正常请求变坏——改动都是语义等价的，本机四段全拼的对照里改前 400、改后 200。
 
 ## 定位过程（可复现）
 
@@ -119,12 +148,18 @@ You are an AI agent powered by DeepSeek Harness.
 
 ## 插件做什么
 
-在宿主进程包一层 `globalThis.fetch`，只对发往 `copilot.tencent.com` 的请求，对 **system / developer / assistant 消息**做两件事：
+在宿主进程包一层 `globalThis.fetch`，只对发往 `copilot.tencent.com` 的请求，对 **system / developer / assistant 消息**做四件事：
 
-1. 把触发源一那段文本里的 @ 换成等义写法 `(at)`；
-2. 把开头的身份句 `You are an AI agent powered by DeepSeek​ Harness.` 换成 `You are an AI agent powered by DeepSeek-Harness.`（空格改连字符）。
+| # | 改什么 | 改成什么 |
+|---|---|---|
+| 1 | 文件引用段里的 `@` | 等义写法 `(at)` |
+| 2 | 开头的 `You are an AI agent powered by DeepSeek​ Harness.` | `You are an AI agent powered by DeepSeek-Harness.`（空格改连字符） |
+| 3 | `You are a coding agent powered by ...` | `You are a coding agent running on ...`（模型名原样保留） |
+| 4 | `... the DeepSeek​ Harness Web GUI ...` / `Current DeepSeek​ Harness Web GUI URL` | `... this Web GUI ...` / `Current Web GUI URL` |
 
-两处都是语义等价改写，模型读到的指令含义没变，网关匹配不到那两个指纹。user 和 tool 消息一个字不动；别的 API（DeepSeek、OpenAI、Anthropic、WorkBuddy 国际版）一律原样透传。
+最后兜底一步：把任何残留的 `DeepSeek` + 不可见分隔 + `Harness` 品牌指纹（含历史会话里冻结的旧段落）统一换成 `DeepSeek-Harness`。
+
+全部是语义等价改写，模型读到的指令含义没变，网关匹配不到那些指纹。user 和 tool 消息一个字不动；别的 API（DeepSeek、OpenAI、Anthropic、WorkBuddy 国际版）一律原样透传。
 
 ### 为什么要连 assistant 一起扫
 
@@ -174,7 +209,7 @@ cd dsh-wb400-guard
 node install.mjs
 ```
 
-它做四件事：拷文件到 `%USERPROFILE%\.dsh\profiles\desktop\vendor\dsh-wb400-guard`、往 profile 的 `package.json` 写 `dependencies` 与 `dsh.profile.bundles`、建 junction 让模块可解析、跑一遍产物的 29 条自测。
+它做四件事：拷文件到 `%USERPROFILE%\.dsh\profiles\desktop\vendor\dsh-wb400-guard`、往 profile 的 `package.json` 写 `dependencies` 与 `dsh.profile.bundles`、建 junction 让模块可解析、跑一遍产物的 40 条自测。
 
 指定别的 profile：
 
@@ -235,7 +270,7 @@ New-Item -ItemType Junction -Path "$prof\node_modules\dsh-wb400-guard" -Target "
 ## 验证
 
 ```powershell
-# 产物自测 29 条：契约、改写（三个触发源场景）、host 判定、幂等、fail-open、安装卸载、配置
+# 产物自测 40 条：契约、四处指纹改写、assistant 扫描、host 判定、幂等、fail-open、安装卸载、配置
 node --test
 
 # 对真实国内网关验证（需要本机已登录 WorkBuddy 桌面版）
@@ -253,7 +288,7 @@ node verify-live.mjs
 另外几个更贴现场的脚本：
 
 ```powershell
-# 两个触发源各自单独发、叠加发，五组真实网关对照
+# 触发源一/二各自单独发、叠加发，五组真实网关对照
 node scripts/verify-identity-live.mjs
 node scripts/verify-assistant-live.mjs
 
@@ -311,6 +346,7 @@ node scripts/compare-vendor.mjs . "$env:USERPROFILE\.dsh\profiles\desktop\vendor
 
 - **网关改了规则**（不再因 `@` 拦截）时插件空转，不影响功能。`verify-live.mjs` 会告诉你原样请求已经能过。
 - **DSH 内核改了 `FILE_REFERENCE_PROMPT` 措辞**时，`anchor` 模式仍有 `Tokens prefixed with @` 这个锚点兜底；锚点也变了就把 `mode` 设成 `all`。
+- **触发源三、四没有在本机独立复现成功**（本机这两段被 dsh-purge 清空过）。纳入改写表是依据他人机器的实测加防御性覆盖。如果你的机器四段全在、改了还是 400，把 mode 设成 ll，开 dryRun 抓一份原始 body 提 issue——那说明网关又加了新指纹。
 - **429 限流与本插件无关**。那是额度用尽，等额度重置。
 - **`stream: false` 会被国内网关拒为 `11101`**，这个码跟 `11128` 不是一回事。本插件只解决 `11128`。
 - **两个插件同时包装 `fetch` 时**后装的在外层。本插件用 `Symbol.for('dsh-wb400-guard.installed')` 保证只装一层，重复调用返回同一个卸载函数，卸载时也不会覆盖别人后来装的 `fetch`。
