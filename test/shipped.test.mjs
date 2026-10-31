@@ -9,6 +9,8 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import os from 'node:os';
+import path from 'node:path';
 
 import * as guard from '../lib/index.js';
 
@@ -639,13 +641,19 @@ test('resolveLogPath 不会把日志写进 USERPROFILE 解出来的乱码目录'
 });
 
 test('resolveLogPath 显式配置优先，DSH_HOME 覆盖家目录', () => {
-  const explicit = 'D:\\tmp\\my-guard.jsonl';
-  assert.equal(guard.resolveLogPath(explicit), 'D:\\tmp\\my-guard.jsonl');
+  // 显式配置按 path.resolve 归一：Windows 上 'D:\\tmp\\x' 就是绝对路径，
+  // Linux/macOS 上它不是绝对路径，resolve 会拼到工作目录后面。
+  // 所以断言用同一个 path.resolve 算期望值，三个平台都成立。
+  const explicit = path.join(os.tmpdir(), 'my-guard.jsonl');
+  assert.equal(guard.resolveLogPath(explicit), path.resolve(explicit));
 
   const savedHome = process.env.DSH_HOME;
-  process.env.DSH_HOME = 'D:\\dsh-home';
+  process.env.DSH_HOME = path.join(os.tmpdir(), 'dsh-home');
   try {
-    assert.equal(guard.resolveLogPath(''), 'D:\\dsh-home\\logs\\dsh-wb400-guard.jsonl');
+    assert.equal(
+      guard.resolveLogPath(''),
+      path.join(process.env.DSH_HOME, 'logs', 'dsh-wb400-guard.jsonl'),
+    );
   } finally {
     if (savedHome === undefined) delete process.env.DSH_HOME;
     else process.env.DSH_HOME = savedHome;
