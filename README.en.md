@@ -3,7 +3,7 @@
 [中文](README.md) | **English**
 
 [![CI](https://github.com/curo22/dsh-wb400-guard/actions/workflows/test.yml/badge.svg)](https://github.com/curo22/dsh-wb400-guard/actions/workflows/test.yml)
-[![tests](https://img.shields.io/badge/tests-40%20passing-brightgreen)](test/shipped.test.mjs)
+[![tests](https://img.shields.io/badge/tests-45%20passing-brightgreen)](test/shipped.test.mjs)
 [![dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)](package.json)
 [![node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-green)](package.json)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -150,7 +150,7 @@ cd dsh-wb400-guard
 node install.mjs
 ```
 
-It copies files into `%USERPROFILE%\.dsh\profiles\desktop\vendor\dsh-wb400-guard`, writes `dependencies` and `dsh.profile.bundles` into the profile's `package.json`, creates a junction so the module resolves, and runs the 40 shipped tests.
+It copies files into `%USERPROFILE%\.dsh\profiles\desktop\vendor\dsh-wb400-guard`, writes `dependencies` and `dsh.profile.bundles` into the profile's `package.json`, creates a junction so the module resolves, and runs the 45 shipped tests.
 
 A different profile:
 
@@ -196,7 +196,7 @@ Tunable in `cordis.patch.yml`:
 | `gatewayHosts` | `["copilot.tencent.com"]` | Hosts to guard; a leading `.` means suffix match. The international gateway is not listed by default |
 | `mode` | `"anchor"` | `anchor` rewrites only the file-reference paragraph; `all` rewrites every `@` in system messages (fallback if the kernel changes wording) |
 | `logPath` | `""` | Empty writes to `~/.dsh/logs/dsh-wb400-guard.jsonl` |
-| `dryRun` | `false` | Log rewrites without applying them |
+| `dryRun` | `false` | When `true` it only observes: the request is sent unchanged and matches are logged as `would-rewrite`. Use it to find out which sentence would trip the gateway |
 
 ## Safety boundaries
 
@@ -206,12 +206,12 @@ Tunable in `cordis.patch.yml`:
 - **Idempotent.** A second pass changes nothing and returns the input reference.
 - **Fail-open.** Any exception in the rewrite path falls back to the original request. No broken turns, no added retries.
 - **Stale `Content-Length` is dropped.** A shortened body carrying the old length gets truncated upstream.
-- **Writes nothing, reports nothing.** The body is read, rewritten, sent. Never persisted, never transmitted anywhere else.
+- **Writes nothing, reports nothing.** The body is read, rewritten, sent. Never persisted, never transmitted anywhere else. URLs in the log keep origin + path only; the query string (which can carry `prompt_cache_key` or a token) is stripped.
 
 ## Verify
 
 ```powershell
-# 40 shipped tests: contract, four-fingerprint rewriting, assistant scanning, host matching, idempotence, fail-open, install/uninstall, config
+# 45 shipped tests: contract, four-fingerprint rewriting, assistant scanning, host matching, idempotence, fail-open, install/uninstall, config
 node --test
 
 # Against the real China gateway (needs WorkBuddy desktop signed in on this machine)

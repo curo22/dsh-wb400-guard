@@ -157,6 +157,85 @@ test('国际网关请求完全不碰', async () => {
   assert.equal(g.stats.rewritten, 0);
 });
 
+test('dryRun: true 时请求原样发出，只记录 would-rewrite', async () => {
+  const { spy, calls } = makeFetchSpy();
+  const events = [];
+  const g = guard.createGuardedFetch({ fetchImpl: spy, dryRun: true, onEvent: (e) => events.push(e) });
+  const body = JSON.stringify({ messages: [{ role: 'system', content: KERNEL_PROMPT }] });
+
+  await g.fetch('https://copilot.tencent.com/v2/chat/completions', { method: 'POST', body });
+
+  assert.equal(calls.length, 1);
+  // 一个字节都没改
+  assert.equal(calls[0].init.body, body);
+  assert.equal(countAt(JSON.parse(calls[0].init.body).messages[0].content), 2);
+  // 统计口径区分"改了"和"本来会改"
+  assert.equal(g.stats.rewritten, 0);
+  assert.equal(g.stats.wouldRewrite, 1);
+  assert.equal(g.stats.passedThrough, 1);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].kind, 'would-rewrite');
+});
+
+test('dryRun: false 时照常改写（默认行为不受影响）', async () => {
+  const { spy, calls } = makeFetchSpy();
+  const g = guard.createGuardedFetch({ fetchImpl: spy, dryRun: false });
+
+  await g.fetch('https://copilot.tencent.com/v2/chat/completions', {
+    method: 'POST',
+    body: JSON.stringify({ messages: [{ role: 'system', content: KERNEL_PROMPT }] }),
+  });
+
+  assert.equal(countAt(JSON.parse(calls[0].init.body).messages[0].content), 0);
+  assert.equal(g.stats.rewritten, 1);
+  assert.equal(g.stats.wouldRewrite, 0);
+});
+
+test('dryRun 下无命中的请求同样不发 would-rewrite 事件', async () => {
+  const { spy } = makeFetchSpy();
+  const events = [];
+  const g = guard.createGuardedFetch({ fetchImpl: spy, dryRun: true, onEvent: (e) => events.push(e) });
+
+  await g.fetch('https://copilot.tencent.com/v2/chat/completions', {
+    method: 'POST',
+    body: JSON.stringify({ messages: [{ role: 'user', content: 'plain text, nothing to rewrite' }] }),
+  });
+
+  assert.equal(events.length, 0);
+  assert.equal(g.stats.wouldRewrite, 0);
+  assert.equal(g.stats.passedThrough, 1);
+});
+
+test('safeUrl 剥掉查询串与 hash，只留 origin + path', () => {
+  assert.equal(
+    guard.safeUrl('https://copilot.tencent.com/v2/chat/completions?token=secret&session=abc'),
+    'https://copilot.tencent.com/v2/chat/completions',
+  );
+  assert.equal(
+    guard.safeUrl('https://copilot.tencent.com/v2/chat/completions#frag'),
+    'https://copilot.tencent.com/v2/chat/completions',
+  );
+  assert.equal(guard.safeUrl('not a url?token=secret'), 'not a url');
+  assert.equal(guard.safeUrl(''), '');
+  assert.equal(guard.safeUrl(null), '');
+});
+
+test('改写事件的 url 不含查询串', async () => {
+  const { spy } = makeFetchSpy();
+  const events = [];
+  const g = guard.createGuardedFetch({ fetchImpl: spy, onEvent: (e) => events.push(e) });
+
+  await g.fetch('https://copilot.tencent.com/v2/chat/completions?prompt_cache_key=session-abc123', {
+    method: 'POST',
+    body: JSON.stringify({ messages: [{ role: 'system', content: KERNEL_PROMPT }] }),
+  });
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0].url, 'https://copilot.tencent.com/v2/chat/completions');
+  assert.equal(events[0].url.includes('?'), false);
+  assert.equal(events[0].url.includes('session-abc123'), false);
+});
+
 test('fetch 内部异常不影响请求（fail-open）', async () => {
   const { spy, calls } = makeFetchSpy();
   let seen = 0;

@@ -3,7 +3,7 @@
 **中文** | [English](README.en.md)
 
 [![CI](https://github.com/curo22/dsh-wb400-guard/actions/workflows/test.yml/badge.svg)](https://github.com/curo22/dsh-wb400-guard/actions/workflows/test.yml)
-[![tests](https://img.shields.io/badge/tests-40%20passing-brightgreen)](test/shipped.test.mjs)
+[![tests](https://img.shields.io/badge/tests-45%20passing-brightgreen)](test/shipped.test.mjs)
 [![dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)](package.json)
 [![node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-green)](package.json)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -209,7 +209,7 @@ cd dsh-wb400-guard
 node install.mjs
 ```
 
-它做四件事：拷文件到 `%USERPROFILE%\.dsh\profiles\desktop\vendor\dsh-wb400-guard`、往 profile 的 `package.json` 写 `dependencies` 与 `dsh.profile.bundles`、建 junction 让模块可解析、跑一遍产物的 40 条自测。
+它做四件事：拷文件到 `%USERPROFILE%\.dsh\profiles\desktop\vendor\dsh-wb400-guard`、往 profile 的 `package.json` 写 `dependencies` 与 `dsh.profile.bundles`、建 junction 让模块可解析、跑一遍产物的 45 条自测。
 
 指定别的 profile：
 
@@ -255,7 +255,7 @@ New-Item -ItemType Junction -Path "$prof\node_modules\dsh-wb400-guard" -Target "
 | `gatewayHosts` | `["copilot.tencent.com"]` | 要防护的 host；以 `.` 开头做后缀匹配。国际网关默认不在列表 |
 | `mode` | `"anchor"` | `anchor` 只改两处指纹那几句；`all` 把 system 里所有 `@` 全换掉（内核改了措辞时兜底） |
 | `logPath` | `""` | 空则写 `~/.dsh/logs/dsh-wb400-guard.jsonl` |
-| `dryRun` | `false` | 只记录不实际改写 |
+| `dryRun` | `false` | `true` 时只观测：请求一个字节都不改，命中只记 `would-rewrite`。配合看日志确认"到底哪句会触发"，排障专用 |
 
 ## 安全边界
 
@@ -265,12 +265,12 @@ New-Item -ItemType Junction -Path "$prof\node_modules\dsh-wb400-guard" -Target "
 - **幂等**。第二次改写不再变动，返回入参原引用。
 - **fail-open**。改写链路任何异常都退回原始请求，不阻断对话、不引入重试。
 - **剔除陈旧的 `Content-Length`**。body 变短后若还带旧长度，上游会按旧长度截断。
-- **不写入、不上报**。只读请求 body，改写后立刻发走，不落盘、不外传。
+- **不写入、不上报**。只读请求 body，改写后立刻发走，不落盘、不外传。日志里的 URL 只留 origin + path，查询串（可能带 `prompt_cache_key`、token）一律剥离。
 
 ## 验证
 
 ```powershell
-# 产物自测 40 条：契约、四处指纹改写、assistant 扫描、host 判定、幂等、fail-open、安装卸载、配置
+# 产物自测 45 条：契约、四处指纹改写、assistant 扫描、host 判定、幂等、fail-open、安装卸载、配置
 node --test
 
 # 对真实国内网关验证（需要本机已登录 WorkBuddy 桌面版）
